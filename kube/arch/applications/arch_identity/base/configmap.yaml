@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-identity-config
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-identity
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+data:
+  identity.schema.json: |
+    {
+      "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "properties": {
+        "traits": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "E-Mail",
+              "ory.sh/kratos": {
+                "credentials": {
+                  "password": {
+                    "identifier": true
+                  }
+                },
+                "verification": {
+                  "via": "email"
+                },
+                "recovery": {
+                  "via": "email"
+                }
+              }
+            },
+            "username": {
+              "type": "string",
+              "title": "Username",
+              "minLength": 3,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9._-]+$",
+              "ory.sh/kratos": {
+                "credentials": {
+                  "password": {
+                    "identifier": true
+                  }
+                }
+              }
+            },
+            "name": {
+              "type": "object",
+              "properties": {
+                "first": { "type": "string", "title": "First Name" },
+                "last": { "type": "string", "title": "Last Name" }
+              }
+            }
+          },
+          "required": ["email", "username"],
+          "additionalProperties": false
+        }
+      }
+    }
+
+  kratos.yml: |
+    version: v1.3.1
+    dev: true
+
+    dsn: postgres://postgres:iX7azt68ErpCKnWobgMbZlaM@pgedge:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+
+    serve:
+      public:
+        base_url: http://localhost:4433/
+        host: 0.0.0.0
+        port: 4433
+        cors:
+          enabled: true
+          debug: true
+          allowed_origins:
+            - http://localhost:3000
+            - http://localhost:8000
+            - http://127.0.0.1:3000
+            - http://127.0.0.1:8000
+          allowed_methods:
+            - POST
+            - GET
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          allowed_headers:
+            - Authorization
+            - Cookie
+            - Content-Type
+            - Accept
+            - Origin
+            - X-Requested-With
+          exposed_headers:
+            - Content-Type
+            - Set-Cookie
+          allow_credentials: true
+      admin:
+        base_url: http://kratos:4434/
+        host: 0.0.0.0
+        port: 4434
+
+    identity:
+      default_schema_id: default
+      schemas:
+        - id: default
+          url: file:///etc/config/kratos/identity.schema.json
+
+    selfservice:
+      default_browser_return_url: http://localhost:3000/
+      allowed_return_urls:
+        - http://localhost:3000/
+        - http://localhost:8000/
+
+      methods:
+        password:
+          enabled: true
+        # Needed by the admin API `POST /admin/recovery/link` (SUPG004 issues set-password links)
+        link:
+          enabled: true
+
+      flows:
+        error:
+          ui_url: http://localhost:3000/error
+        settings:
+          ui_url: http://localhost:3000/settings
+          privileged_session_max_age: 15m
+        recovery:
+          enabled: true
+          ui_url: http://localhost:3000/recovery
+        verification:
+          enabled: true
+          ui_url: http://localhost:3000/verification
+        logout:
+          after:
+            default_browser_return_url: http://localhost:3000/login
+        login:
+          ui_url: http://localhost:3000/login
+          lifespan: 10m
+          after:
+            password:
+              hooks:
+                # Refuse login when the user, its company or its organization is inactive.
+                # api-master runs on the host (`make run-master`), reached via host.k3d.internal
+                # (mapped to the host by hostAliases in deployment.yaml).
+                - hook: web_hook
+                  config:
+                    url: http://host.k3d.internal:8000/api/v1/hooks/login-guard
+                    method: POST
+                    body: base64://ewogICJpZGVudGlmaWVyIjogInt7IC5JZGVudGl0eS50cmFpdHMuZW1haWwgfX0iCn0=
+                    can_interrupt: true
+                    response:
+                      parse: true
+                    auth:
+                      type: api_key
+                      config:
+                        name: X-Webhook-Secret
+                        # Must equal KRATOS_WEBHOOK_SECRET in api-master's .env
+                        value: login-guard-dev-secret-7c41e9b2
+                        in: header
+        registration:
+          lifespan: 10m
+          ui_url: http://localhost:3000/registration
+          after:
+            password:
+              hooks:
+                - hook: session
+
+    secrets:
+      cookie:
+        - "Jfpci5yCsgnuvbVjRIBclqGVfOsqzsG4"
+      cipher:
+        - "aWX3GoibtR2K27AgFdnB9YGV3WHgAbJM"
+
+    log:
+      level: info
+      format: json

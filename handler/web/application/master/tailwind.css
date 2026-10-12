@@ -1,0 +1,5 @@
+/* Input of the Tailwind CLI (see tailwind.config.js). The theme variables live in
+   handler/web/package/style.css, which index.html links separately. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

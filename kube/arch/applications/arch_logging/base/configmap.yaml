@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-logging-config
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-logging
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+data:
+  quickwit.yaml: |
+    version: 0.8
+    cluster_id: quickwit-local
+    node_id: node-1
+    # Reachable from outside the pod (NodePorts 30280 / 30281)
+    listen_address: 0.0.0.0
+
+    metastore_uri: file:///var/lib/quickwit/metastore
+    default_index_root_uri: file:///var/lib/quickwit/indexes
+
+    # REST (search / ingest API) on 7280; the gRPC / OTLP port is the REST port + 1 (7281)
+    rest:
+      listen_port: 7280

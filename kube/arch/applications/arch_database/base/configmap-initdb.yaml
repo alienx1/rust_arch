@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-database-initdb
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-database
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+data:
+  000-bootstrap.sql: |
+    -- Create Kratos database for Ory Kratos Identity
+    SELECT 'CREATE DATABASE kratos'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'kratos')\gexec
+
+    -- Ensure arch database and schema exist
+    SELECT 'CREATE DATABASE arch'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'arch')\gexec
+
+    \c arch;
+    CREATE SCHEMA IF NOT EXISTS arch;
+
+    -- Set default search_path to arch schema for all connections
+    ALTER DATABASE arch SET search_path TO arch, public;
+    ALTER ROLE postgres IN DATABASE arch SET search_path TO arch, public;
+    ALTER ROLE postgres SET search_path TO arch, public;

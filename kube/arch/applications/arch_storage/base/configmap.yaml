@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-storage-config
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-storage
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+    db_engine = "sqlite"
+
+    replication_factor = 1
+
+    rpc_bind_addr = "0.0.0.0:3902"
+    rpc_public_addr = "127.0.0.1:3902"
+    rpc_secret = "8e3d59263a634e6c4b271d60e94e54f28f079904c662bbd5c5c1004a910443bc"
+
+    [s3_api]
+    api_bind_addr = "0.0.0.0:3900"
+    s3_region = "garage"
+    root_domain = ".s3.garage.localhost"
+
+    [admin]
+    api_bind_addr = "0.0.0.0:3903"
+    admin_token = "2kfBy0Z0ONiBt6vKE96qaBfTV68OKam3"
+  # Dev defaults, public in this repository (the user approved them): CHANGE the key and secret
+  # before any shared deployment. They must match AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+  # S3_BUCKET_NAME in .env.
+  garage-bootstrap.sh: |
+    #!/bin/sh
+    API=http://127.0.0.1:3903
+    TOKEN=2kfBy0Z0ONiBt6vKE96qaBfTV68OKam3
+    KEY_ID=GKa4c1e7b05d3f2a6c91e8b7d2
+    SECRET=5b1c0e9d7a3f48e2b6d4c8a1f09e7d3b2a5c6e8f1d4b7a9c0e3f6d2b8a5c1e47
+    BUCKET=rust-arch-bucket
+    call() { # path [json]
+      if [ -n "$2" ]; then
+        wget -qO- --header "Authorization: Bearer $TOKEN" --header "Content-Type: application/json" --post-data "$2" "$API$1"
+      else
+        wget -qO- --header "Authorization: Bearer $TOKEN" "$API$1"
+      fi
+    }
+    until call /v1/status >/dev/null 2>&1; do echo "[garage-init] waiting for garage"; sleep 2; done
+    NODE=$(call /v1/status | tr -d ' \n' | sed -n 's/.*"node":"\([0-9a-f]*\)".*/\1/p' | head -n 1)
+    echo "[garage-init] node $NODE"
+    if ! call /v1/layout | tr -d ' \n' | grep -q "\"id\":\"$NODE\""; then
+      call /v1/layout "[{\"id\":\"$NODE\",\"zone\":\"dc1\",\"capacity\":1073741824,\"tags\":[]}]" >/dev/null
+      VERSION=$(call /v1/layout | tr -d ' \n' | sed -n 's/.*"version":\([0-9]*\).*/\1/p' | head -n 1)
+      call /v1/layout/apply "{\"version\":$((VERSION + 1))}" >/dev/null
+    fi
+    call /v1/key/import "{\"accessKeyId\":\"$KEY_ID\",\"secretAccessKey\":\"$SECRET\",\"name\":\"rust-arch-key\"}" >/dev/null 2>&1 || true
+    call /v1/bucket "{\"globalAlias\":\"$BUCKET\"}" >/dev/null 2>&1 || true
+    BUCKET_ID=$(call "/v1/bucket?globalAlias=$BUCKET" | tr -d ' \n' | sed -n 's/.*"id":"\([0-9a-f]*\)".*/\1/p' | head -n 1)
+    call /v1/bucket/allow "{\"bucketId\":\"$BUCKET_ID\",\"accessKeyId\":\"$KEY_ID\",\"permissions\":{\"read\":true,\"write\":true,\"owner\":true}}" >/dev/null
+    echo "[garage-init] bucket $BUCKET ($BUCKET_ID) ready"
+    while true; do sleep 3600; done

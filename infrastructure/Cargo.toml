@@ -1,0 +1,52 @@
+[package]
+name = "infrastructure"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+domain = { workspace = true }
+application-core = { workspace = true }
+
+# Database (pgEdge / Postgres)
+sea-orm = { workspace = true }
+
+# Cache & Streaming (Valkey / Redpanda)
+redis = { workspace = true }
+rdkafka = { workspace = true }
+
+# Object Storage (Garage)
+aws-sdk-s3 = { workspace = true }
+aws-config = { workspace = true }
+
+# Identity / IAM (Ory Kratos)
+reqwest = { workspace = true }
+ory-kratos-client = { workspace = true }
+
+# HTTP & Middlewares (Axum & Tower)
+axum = { workspace = true }
+http-body = "1"
+tower = { workspace = true }
+tower-http = { workspace = true }
+subtle = { workspace = true }
+
+# Observability (Quickwit / Tracing)
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+
+# Core utilities
+tokio = { workspace = true, features = ["time", "sync", "rt", "macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ciborium = { workspace = true }
+thiserror = { workspace = true }
+dotenvy = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }

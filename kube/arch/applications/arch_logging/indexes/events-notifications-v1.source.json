@@ -1,0 +1,14 @@
+{
+  "version": "0.8",
+  "source_id": "redpanda-notifications",
+  "source_type": "kafka",
+  "num_pipelines": 1,
+  "params": {
+    "topic": "notifications",
+    "client_params": {
+      "bootstrap.servers": "redpanda:9092",
+      "group.id": "quickwit-events-notifications",
+      "auto.offset.reset": "earliest"
+    }
+  }
+}

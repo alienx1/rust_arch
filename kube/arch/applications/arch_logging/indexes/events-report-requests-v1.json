@@ -1,0 +1,18 @@
+{
+  "version": "0.8",
+  "index_id": "events-report-requests-v1",
+  "doc_mapping": {
+    "mode": "lenient",
+    "timestamp_field": "requested_at",
+    "field_mappings": [
+      {"name": "requested_at", "type": "datetime", "input_formats": ["rfc3339"], "fast": true, "fast_precision": "milliseconds"},
+      {"name": "job_id", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "report_kind", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "requested_by", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "filter", "type": "json", "stored": true}
+    ]
+  },
+  "indexing_settings": {"commit_timeout_secs": 10},
+  "search_settings": {"default_search_fields": ["job_id", "report_kind", "requested_by"]},
+  "retention": {"period": "90 days", "schedule": "daily"}
+}

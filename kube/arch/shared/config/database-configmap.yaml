@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-database-config
+  namespace: arch
+  labels:
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/component: database
+    app.kubernetes.io/managed-by: kustomize
+data:
+  ARCH_DB_NAME: "arch"
+  ARCH_DB_USER: "postgres"
+  ARCH_DB_SCHEMA: "arch"
+  KRATOS_DB_NAME: "kratos"
+  KRATOS_DB_USER: "postgres"

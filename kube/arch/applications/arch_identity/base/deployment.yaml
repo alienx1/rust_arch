@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arch-identity
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-identity
+    app.kubernetes.io/instance: local
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arch-identity
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arch-identity
+        app.kubernetes.io/instance: local
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: arch
+        app.kubernetes.io/managed-by: kustomize
+    spec:
+      # Rootless podman (pasta): the host is reachable at 169.254.1.2, not at k3d's host.k3d.internal (10.89.2.1).
+      hostAliases:
+        - ip: 169.254.1.2
+          hostnames:
+            - host.k3d.internal
+      initContainers:
+        - name: kratos-migrate
+          image: oryd/kratos:v1.3.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - kratos
+            - migrate
+            - sql
+            - -e
+            - --yes
+            - -c
+            - /etc/config/kratos/kratos.yml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config/kratos
+      containers:
+        - name: kratos
+          image: oryd/kratos:v1.3.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - kratos
+            - serve
+            - --dev
+            - -c
+            - /etc/config/kratos/kratos.yml
+            - --watch-courier
+          ports:
+            - containerPort: 4433
+              name: public
+            - containerPort: 4434
+              name: admin
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config/kratos
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: arch-identity-config

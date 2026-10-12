@@ -1,0 +1,45 @@
+{
+  "version": "0.8",
+  "index_id": "audit-logs-v1",
+  "doc_mapping": {
+    "mode": "lenient",
+    "timestamp_field": "timestamp",
+    "field_mappings": [
+      {"name": "timestamp", "type": "datetime", "input_formats": ["rfc3339"], "fast": true, "fast_precision": "milliseconds"},
+      {"name": "event_id", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "kind", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "user_id", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "username", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "email", "type": "text", "tokenizer": "raw"},
+      {"name": "session_id", "type": "text", "tokenizer": "raw"},
+      {"name": "ip", "type": "text", "tokenizer": "raw"},
+      {"name": "user_agent", "type": "text"},
+      {"name": "language", "type": "text", "tokenizer": "raw"},
+      {"name": "method", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "path", "type": "text", "tokenizer": "default", "record": "position"},
+      {"name": "path_raw", "type": "text", "tokenizer": "raw"},
+      {"name": "query", "type": "text"},
+      {"name": "program_code", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "action", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "status", "type": "u64", "fast": true},
+      {"name": "duration_ms", "type": "u64", "fast": true},
+      {"name": "request_headers", "type": "json", "stored": true},
+      {"name": "response_headers", "type": "json", "stored": true},
+      {"name": "request_body", "type": "text", "stored": true},
+      {"name": "response_body", "type": "text", "stored": true},
+      {"name": "page", "type": "text", "tokenizer": "raw"},
+      {"name": "element", "type": "text"},
+      {"name": "label", "type": "text"},
+      {"name": "detail", "type": "text"},
+      {"name": "table_name", "type": "text", "tokenizer": "default"},
+      {"name": "changes", "type": "text", "stored": true},
+      {"name": "request_id", "type": "text", "tokenizer": "raw"}
+    ]
+  },
+  "search_settings": {
+    "default_search_fields": ["username", "path", "label", "detail", "request_body", "response_body", "table_name", "changes"]
+  },
+  "indexing_settings": {
+    "commit_timeout_secs": 5
+  }
+}

@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - shared-credentials-secret.yaml
+  - database-init-secret.yaml
+  - identity-secret.yaml
+
+replacements:
+  - source:
+      kind: Secret
+      name: arch-shared-credentials
+      fieldPath: stringData.POSTGRES_PASSWORD
+    targets:
+      - select:
+          kind: Secret
+          name: arch-database-init-secret
+        fieldPaths:
+          - stringData.POSTGRES_PASSWORD
+  - source:
+      kind: Secret
+      name: arch-shared-credentials
+      fieldPath: stringData.KRATOS_SECRET_COOKIE
+    targets:
+      - select:
+          kind: Secret
+          name: arch-identity-secret
+        fieldPaths:
+          - stringData.COOKIE_SECRET
+  - source:
+      kind: Secret
+      name: arch-shared-credentials
+      fieldPath: stringData.KRATOS_SECRET_CIPHER
+    targets:
+      - select:
+          kind: Secret
+          name: arch-identity-secret
+        fieldPaths:
+          - stringData.CIPHER_SECRET

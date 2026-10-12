@@ -1,0 +1,38 @@
+[package]
+name = "master-app"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Leptos CSR (WebAssembly) single-page application for Master Data & IAM."
+
+[[bin]]
+name = "master-app"
+path = "src/main.rs"
+
+[dependencies]
+web-package = { workspace = true }
+
+leptos = { workspace = true }
+leptos_router = { workspace = true }
+tailwind_fuse = { workspace = true }
+lucide-leptos = { workspace = true }
+gloo-net = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+console_error_panic_hook = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ciborium = { workspace = true }
+uuid = { workspace = true, features = ["js"] }
+chrono = { workspace = true }
+js-sys = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = ["Window", "Document", "Element", "DomTokenList", "Storage", "HtmlInputElement", "Navigator", "Clipboard", "EventTarget", "Event", "MouseEvent", "HtmlElement", "Node", "Location", "Blob", "BlobPropertyBag", "EventSource", "MessageEvent"]
+
+[build-dependencies]
+dotenvy = { workspace = true }
+

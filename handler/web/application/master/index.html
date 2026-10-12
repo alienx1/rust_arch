@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Master Application</title>
+    <link data-trunk rel="css" href="../../package/style.css" />
+    <!-- Inter is served from this app (package/fonts, SIL OFL): no third-party font request -->
+    <link data-trunk rel="css" href="../../package/fonts/inter.css" />
+    <link data-trunk rel="copy-dir" href="../../package/fonts" />
+    <!-- Utility CSS is compiled at build time by the Tailwind CLI (tailwind.config.js, tailwind.css; version pinned in Trunk.toml.tmpl) -->
+    <link data-trunk rel="tailwind-css" href="tailwind.css" />
+    <script>
+      // Dark mode before the first paint (the toggle in the topbar keeps `theme` in localStorage)
+      (function() {
+        try {
+          var t = localStorage.getItem('theme');
+          var dark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {}
+      })();
+    </script>
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+  </head>
+  <body class="bg-background text-foreground antialiased font-sans">
+  </body>
+</html>

@@ -1,0 +1,31 @@
+[package]
+name = "api-notification"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "api_notification"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api-notification"
+path = "src/main.rs"
+
+[dependencies]
+application-core = { workspace = true }
+application-notification = { workspace = true }
+infrastructure = { workspace = true }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dotenvy = { workspace = true }
+sea-orm = { workspace = true }
+futures-util = { workspace = true }

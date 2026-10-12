@@ -1,0 +1,21 @@
+{
+  "version": "0.8",
+  "index_id": "events-notifications-v1",
+  "doc_mapping": {
+    "mode": "lenient",
+    "timestamp_field": "created_at",
+    "field_mappings": [
+      {"name": "created_at", "type": "datetime", "input_formats": ["rfc3339"], "fast": true, "fast_precision": "milliseconds"},
+      {"name": "id", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "recipient", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "kind", "type": "text", "tokenizer": "raw", "fast": true},
+      {"name": "title", "type": "text"},
+      {"name": "body", "type": "text"},
+      {"name": "link", "type": "text", "tokenizer": "raw"},
+      {"name": "data", "type": "json", "stored": true}
+    ]
+  },
+  "indexing_settings": {"commit_timeout_secs": 10},
+  "search_settings": {"default_search_fields": ["title", "body", "recipient", "kind"]},
+  "retention": {"period": "90 days", "schedule": "daily"}
+}

@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arch-streaming
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-streaming
+    app.kubernetes.io/instance: local
+    app.kubernetes.io/component: streaming
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # RWO volume: the old pod must release it first
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arch-streaming
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arch-streaming
+        app.kubernetes.io/instance: local
+        app.kubernetes.io/component: streaming
+        app.kubernetes.io/part-of: arch
+        app.kubernetes.io/managed-by: kustomize
+    spec:
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v24.3.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - rpk
+            - redpanda
+            - start
+            - --mode
+            - dev-container
+            - --smp
+            - "1"
+            - --memory
+            - "1G"
+            - --reserve-memory
+            - "0M"
+            - --overprovisioned
+            - --kafka-addr
+            - internal://0.0.0.0:9092,external://0.0.0.0:19092
+            - --advertise-kafka-addr
+            - internal://redpanda:9092,external://localhost:9092
+            - --pandaproxy-addr
+            - 0.0.0.0:8082
+            - --schema-registry-addr
+            - 0.0.0.0:8081
+            # The admin API listens on localhost only by default; the console reaches it by name
+            - --set
+            - 'redpanda.admin=[{"address":"0.0.0.0","port":9644}]'
+          ports:
+            - containerPort: 9092
+              name: kafka-internal
+            - containerPort: 19092
+              name: kafka-external
+            - containerPort: 9644
+              name: admin
+            - containerPort: 8081
+              name: schema-reg
+            - containerPort: 8082
+              name: proxy
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: arch-streaming-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arch-streaming-console
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-streaming-console
+    app.kubernetes.io/instance: local
+    app.kubernetes.io/component: streaming-ui
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arch-streaming-console
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arch-streaming-console
+        app.kubernetes.io/instance: local
+        app.kubernetes.io/component: streaming-ui
+        app.kubernetes.io/part-of: arch
+        app.kubernetes.io/managed-by: kustomize
+    spec:
+      containers:
+        - name: console
+          image: docker.redpanda.com/redpandadata/console:v2.8.2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BROKERS
+              value: "redpanda:9092"
+            - name: KAFKA_SCHEMAREGISTRY_ENABLED
+              value: "true"
+            - name: KAFKA_SCHEMAREGISTRY_URLS
+              value: "http://redpanda:8081"
+            - name: REDPANDA_ADMINAPI_ENABLED
+              value: "true"
+            - name: REDPANDA_ADMINAPI_URLS
+              value: "http://redpanda:9644"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+# Survives pod recreation (local-path provisioner), like the Postgres data volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arch-streaming-data
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-streaming-data
+    app.kubernetes.io/component: streaming
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

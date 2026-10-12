@@ -1,0 +1,38 @@
+# TEMPLATE of Trunk.toml. Do not edit Trunk.toml: it is generated from this file and the root .env by
+# `make web` (gen-trunk-config.sh) and is not tracked by git. Placeholders are upper-case names between double @ signs.
+
+[build]
+target = "index.html"
+
+# Tailwind CLI used by `<link data-trunk rel="tailwind-css">` in index.html. trunk downloads this exact
+# version once (or uses a `tailwindcss` of that version found on PATH): the same CSS on every machine.
+[tools]
+tailwindcss = "3.4.17"
+
+[watch]
+watch = ["src", "../../package", "../../../../.env"]
+
+[serve]
+port = @@WEB_PORT@@
+open = false
+
+# Reverse proxy for Ory Kratos: same-origin, eliminating CORS and cross-site cookie issues
+[[proxy]]
+rewrite = "/api/kratos/"
+backend = "@@KRATOS_URL@@/"
+
+# Reverse proxy for the notification service (api-notification: list, mark as read, push stream)
+[[proxy]]
+rewrite = "/api/v1/notifications/"
+backend = "@@NOTIFICATION_URL@@@@NOTIFICATION_PREFIX@@/"
+
+# Reverse proxy for the report service (api-report: my reports, preview, download, push stream).
+# Listed before the generic /api/v1/ entry: the longer prefix must win.
+[[proxy]]
+rewrite = "/api/v1/reports/"
+backend = "@@REPORT_URL@@@@REPORT_PREFIX@@/"
+
+# Reverse proxy for Master Data Axum REST API
+[[proxy]]
+rewrite = "/api/v1/"
+backend = "@@MASTER_URL@@/api/v1/"

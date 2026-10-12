@@ -1,0 +1,14 @@
+{
+  "version": "0.8",
+  "source_id": "redpanda-report-requests",
+  "source_type": "kafka",
+  "num_pipelines": 1,
+  "params": {
+    "topic": "report.requests",
+    "client_params": {
+      "bootstrap.servers": "redpanda:9092",
+      "group.id": "quickwit-events-report-requests",
+      "auto.offset.reset": "earliest"
+    }
+  }
+}

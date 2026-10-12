@@ -1,0 +1,36 @@
+[package]
+name = "api-report"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "api_report"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api-report"
+path = "src/main.rs"
+
+[dependencies]
+domain = { workspace = true }
+application-core = { workspace = true }
+application-report = { workspace = true }
+infrastructure = { workspace = true }
+
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dotenvy = { workspace = true }
+sea-orm = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }

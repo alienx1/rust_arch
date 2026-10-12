@@ -1,0 +1,68 @@
+# 🔔 NTPG000 - การแจ้งเตือน (Notifications)
+
+บริการกลางที่ทุก service ใช้บอกผู้ใช้ว่าเกิดอะไรขึ้น (รายงานเสร็จ, งานรออนุมัติ ฯลฯ) แสดงที่ไอคอนกระดิ่งใน topbar ทุกหน้า และหน้ารายการ `/nt/ntpg000`
+
+## Flow
+
+```text
+service ใดก็ได้ ──NotificationService.notify()──▶ Redpanda topic `notifications` (key = recipient)
+                                                      │
+                                                      ▼
+                                      api-notification (consumer group `notification-service`)
+                                       1. เก็บลง nt_notification (id = UUIDv7 ของ noti → ส่งซ้ำไม่เกิดแถวซ้ำ)
+                                       2. push ผ่าน SSE ไปทุก session ของ recipient
+                                                      │
+                                                      ▼
+                                web: กระดิ่ง (จำนวนที่ยังไม่อ่าน + 10 รายการล่าสุด) / หน้า NTPG000
+```
+
+- **ผู้ส่ง** ใช้ port `NotificationService` (`application-core`) adapter `RedpandaNotificationPublisher` (`infrastructure`) ไม่ต้องรู้จัก SSE หรือฐานข้อมูล: `notify(username, Notification { id, kind, title, body, data, link, created_at })`
+- **ผู้รับ** ระบุด้วย Kratos username (ทุกแท็บ/อุปกรณ์ที่ล็อกอินด้วยผู้ใช้นั้นได้พร้อมกัน; ผู้ใช้อื่นไม่ได้)
+- `link` = path ในเว็บที่เปิดเมื่อกดแถว (ต้องขึ้นต้นด้วย `/`; ลิงก์ออกนอกเว็บถูกทิ้ง กัน phishing)
+- สถานะ "อ่านแล้ว" อยู่ที่ server (`read_at`) และมี event `changed` ทาง SSE ให้ทุกแท็บโหลดใหม่ → กดอ่านแท็บหนึ่ง แท็บอื่นเปลี่ยนตามทันที
+- คนที่ปิดเว็บอยู่ตอนส่ง จะเห็นเมื่อกลับมา (โหลดรายการจาก server ตอนต่อ SSE)
+- **การอ่าน**: แจ้งเตือนถูกทำเป็น "อ่านแล้ว" เมื่อ**กดที่แถวนั้น**เท่านั้น (ในกระดิ่งหรือหน้า NTPG000) หรือกด "อ่านทั้งหมดแล้ว" — เปิด/ปิดกระดิ่งหรือเข้าหน้ารายการเฉยๆ ไม่ถือว่าอ่าน
+
+## API (`api-notification`, พอร์ต 8002, ต้องมี Kratos session)
+
+| Method | Path | ทำอะไร |
+|---|---|---|
+| GET | `/api/v1/notifications/items?limit=` | รายการของฉัน (ใหม่สุดก่อน, ค่าเริ่มต้น 20, สูงสุด 100) + `unread` ทั้งหมด |
+| POST | `/api/v1/notifications/{id}/read` | อ่านแล้ว 1 รายการ (ของคนอื่น/ไม่มี = 404) |
+| POST | `/api/v1/notifications/read-all` | อ่านแล้วทั้งหมด |
+| GET | `/api/v1/notifications/stream` | SSE: `ready`, `notification` (รายการใหม่), `changed` (สถานะอ่านเปลี่ยน → โหลดใหม่) |
+
+## ข้อมูลและโครงสร้างโค้ด
+
+- ตาราง `nt_notification` (`sql/01_ysql.sql`), entity `domain/src/entity/nt_notification.rs`
+- `application/notification` — feature `ntpg000` (ingest / list / mark read) พร้อมเทสต์ใน `application/notification/tests/`
+- `handler/api/notification` — consumer + REST + SSE (`make run-notification`)
+- เว็บ: `handler/web/application/master/src/pages/nt/ntpg000/` (กระดิ่งอยู่ใน `MasterLayout` ผ่าน `topbar_actions` ของ `MainLayout`)
+- Trunk proxy `/api/v1/notifications/ → 8002` (ต้องอยู่ก่อน `/api/v1/`)
+
+## การรันหลาย instance
+
+SSE hub อยู่ใน memory ของแต่ละ instance และทุก instance ต้องเห็นทุกข้อความเพื่อ push ให้ผู้ใช้ที่ต่อกับตัวเอง จึงต้องกำหนด `NOTIFICATION_CONSUMER_GROUP` **ไม่ซ้ำกัน** ต่อ instance (การเก็บลง DB ปลอดภัยแม้ทุกตัวเก็บซ้ำ เพราะ insert ด้วย id เดียวกันจะถูกข้าม)
+
+## เพิ่ม noti ชนิดใหม่
+
+ตั้ง `kind` ใหม่ (ค่าคงที่ใน `notification_kind`), `title`/`body` (ข้อความที่ผู้ใช้เห็น), `data` สำหรับข้อมูลเฉพาะชนิด และ `link` ไปหน้าที่เกี่ยวข้อง แล้วเรียก `notify` ไม่ต้องแก้ notification service หรือหน้าเว็บ
+
+## ข้อจำกัด
+
+- ผู้ส่งแบบ fire-and-forget: ถ้า broker ล่ม noti ไม่ถูกส่ง (บันทึก log) งานต้นทางไม่ล้ม
+- ยังไม่มีการลบ/เก็บถาวรเกินกำหนด (ตาราง `nt_notification` โตเรื่อยๆ)
+- topic ต้องมีอยู่ก่อน: `make topics`
+
+## เก็บ event ใน Quickwit
+
+ทุกข้อความใน Redpanda topic `report.requests` และ `notifications` ถูกเก็บลง Quickwit ด้วย Kafka source ของ Quickwit เอง (ไม่มีโค้ดเพิ่ม, consumer group `quickwit-events-*`, เก็บ 90 วัน):
+
+| Index | Topic | Timestamp |
+|---|---|---|
+| `events-report-requests-v1` | `report.requests` | `requested_at` |
+| `events-notifications-v1` | `notifications` | `created_at` |
+
+- สร้าง index/source: `make event-indexes` (idempotent, `make topics` เรียกให้อัตโนมัติ) — config อยู่ที่ `kube/arch/applications/arch_logging/indexes/`
+- ค้นหา: `curl 'localhost:7280/api/v1/events-notifications-v1/search?query=recipient:<user_id>'`
+- Quickwit อยู่บน PVC แล้ว จึงไม่หายเมื่อ pod รีสตาร์ท

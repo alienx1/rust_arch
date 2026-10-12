@@ -1,0 +1,10 @@
+//! Suspend a user account
+
+use crate::features::su::supg005::commands::Supg005CommandExecutor;
+use crate::features::su::supg005::errors::Supg005Error;
+
+impl Supg005CommandExecutor {
+    pub(super) async fn suspend_account(&self, user_id: &str) -> Result<bool, Supg005Error> {
+        self.set_account_active(user_id, false).await
+    }
+}

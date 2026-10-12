@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arch-logging
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-logging
+    app.kubernetes.io/instance: local
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # RWO volume: the old pod must release it first
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arch-logging
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arch-logging
+        app.kubernetes.io/instance: local
+        app.kubernetes.io/component: logging
+        app.kubernetes.io/part-of: arch
+        app.kubernetes.io/managed-by: kustomize
+    spec:
+      containers:
+        - name: quickwit
+          image: quickwit/quickwit:v0.8.2
+          imagePullPolicy: IfNotPresent
+          args: ["run", "--config", "/etc/quickwit/quickwit.yaml"]
+          ports:
+            - containerPort: 7280
+              name: rest
+            - containerPort: 7281
+              name: grpc-otlp
+          volumeMounts:
+            - name: config
+              mountPath: /etc/quickwit/quickwit.yaml
+              subPath: quickwit.yaml
+            - name: data
+              mountPath: /var/lib/quickwit
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: arch-logging-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: arch-logging-data
+---
+# Survives pod recreation (local-path provisioner), like the Postgres data volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arch-logging-data
+  namespace: arch
+  labels:
+    app.kubernetes.io/name: arch-logging-data
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: arch
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
