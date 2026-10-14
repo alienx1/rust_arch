@@ -11,7 +11,7 @@
 |---|---|
 | รหัสโปรแกรม | `XXPGNNN` — `XX` = ระบบ 2 ตัวอักษร, `PG` = page, `NNN` = เลขลำดับ (ใหญ่/ตัวพิมพ์ใหญ่) |
 | path เว็บ | `/xx/xxpgnnn` (ตัวพิมพ์เล็ก — เมนูใช้ค่านี้เป็นเส้นทางหลักของโปรแกรม) |
-| path API | `/api/v1/xx/xxpgnnn/...` — **ต้องมี segment `xxpgnnn`** เพราะ audit หา "โปรแกรม" ของ request จาก segment นี้ (`infrastructure/src/middleware/audit_target.rs`) |
+| path API | `/api/v1/xx/xxpgnnn/...` — **ต้องมี segment `xxpgnnn`** เพราะ audit หา "โปรแกรม" ของ request จาก segment นี้ (`infrastructure/src/middleware/audit/audit_target.rs`) |
 | สิทธิ์ | `READ` (ดู), `WRITE` (เพิ่ม/แก้/ลบ/สั่งงาน), `APPROVE` (อนุมัติ) — ตรวจที่ router ด้วย `require(&access, &user, "XXPGNNN", PermissionAction::…)` |
 | ขอบเขตข้อมูล | ถ้างานผูกกับองค์กร/บริษัท/สาขา/แผนก ใช้ `require_in` + `ScopeTarget` (ดู DBPG003 / `access_scope_test.rs`) |
 | เมนู | โปรแกรมอยู่ใต้โฟลเดอร์ (เช่น `ALPG000_GROUP`) หรืออยู่เดี่ยว; ถ้าเป็นหน้าของ "ตัวผู้ใช้เอง" (รายงานของฉัน, แจ้งเตือน) ให้เข้าเมนู dropdown ผู้ใช้ — ดู `USER_MENU_PROGRAMS` ใน `layouts/master_navigation.rs` |

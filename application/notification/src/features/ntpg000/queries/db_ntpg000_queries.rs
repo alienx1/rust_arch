@@ -49,6 +49,30 @@ impl Ntpg000Queries for DbNtpg000Queries {
             .map_err(db_err)
     }
 
+    async fn prune(&self, recipient: &str, keep: u64) -> Result<u64, Ntpg000Error> {
+        let stale: Vec<Uuid> = Notification::find()
+            .select_only()
+            .column(Column::Id)
+            .filter(Column::Recipient.eq(recipient))
+            .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
+            .offset(keep)
+            .into_tuple()
+            .all(&self.db)
+            .await
+            .map_err(db_err)?;
+        if stale.is_empty() {
+            return Ok(0);
+        }
+        let done = Notification::delete_many()
+            .filter(Column::Recipient.eq(recipient))
+            .filter(Column::Id.is_in(stale))
+            .exec(&self.db)
+            .await
+            .map_err(db_err)?;
+        Ok(done.rows_affected)
+    }
+
     async fn count_unread(&self, recipient: &str) -> Result<u64, Ntpg000Error> {
         Notification::find()
             .filter(Column::Recipient.eq(recipient))

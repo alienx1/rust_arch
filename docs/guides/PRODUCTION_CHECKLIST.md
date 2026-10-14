@@ -39,7 +39,7 @@ repo นี้ตั้งค่าไว้สำหรับ **พัฒนา
 | ☐ | แทน proxy ของ Trunk ด้วย reverse proxy จริง (path เดียวกัน: `/api/kratos`, `/api/v1/notifications`, `/api/v1/reports`, `/api/v1`) | `Trunk.toml.tmpl` / `gen-trunk-config.sh` ใช้ตอน dev เท่านั้น |
 | ☐ | CORS จำกัดเฉพาะโดเมนจริง และ `CORS_ALLOW_CREDENTIALS` ตรวจแล้ว | `.env` |
 | ☐ | Rate limit / WAF หน้า API (ตัวแอปไม่มี) | gateway |
-| ☐ | เชื่อ header `X-Forwarded-For` เฉพาะจาก proxy ที่ไว้ใจ (audit เก็บ IP จาก header นี้) | `infrastructure/src/middleware/audit_trail.rs` |
+| ☐ | เชื่อ header `X-Forwarded-For` เฉพาะจาก proxy ที่ไว้ใจ (audit เก็บ IP จาก header นี้) | `infrastructure/src/middleware/audit/audit_trail.rs` |
 
 ## 4. ข้อมูลและความทนทาน
 

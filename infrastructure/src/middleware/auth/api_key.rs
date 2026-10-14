@@ -139,7 +139,7 @@ impl ApiKeyConfig {
 /// Can be plugged into an Axum router using:
 /// ```rust,ignore
 /// use axum::middleware;
-/// use infrastructure::middleware::api_key::{require_api_key, ApiKeyConfig};
+/// use infrastructure::middleware::auth::api_key::{require_api_key, ApiKeyConfig};
 ///
 /// let config = ApiKeyConfig::new("my-secret-report-key");
 /// let router = Router::new()

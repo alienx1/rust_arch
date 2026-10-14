@@ -9,7 +9,7 @@ use axum::{
     http::{Method, Request, StatusCode, header},
     routing::get,
 };
-use infrastructure::middleware::cors::{CorsConfig, cors_layer, cors_layer_from_env};
+use infrastructure::middleware::http::cors::{CorsConfig, cors_layer, cors_layer_from_env};
 use tower::ServiceExt;
 
 #[tokio::test]

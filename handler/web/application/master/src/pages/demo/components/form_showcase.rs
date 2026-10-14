@@ -3,8 +3,8 @@
 use crate::pages::demo::providers::use_demo;
 use leptos::prelude::*;
 use web_package::ui::component::{
-    Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, Input, SearchInput,
-    Slider, Switch, Textarea,
+    Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, DateRangePicker, Input,
+    Label, RadioGroup, RadioGroupItem, SearchInput, Select, SelectOption, Slider, Switch, Textarea,
 };
 
 #[component]
@@ -14,6 +14,9 @@ pub fn FormShowcase() -> impl IntoView {
     let (switch_read, switch_write) = ctx.switch_val;
     let (progress_read, progress_write) = ctx.progress_val;
     let (input_read, input_write) = ctx.input_val;
+    let (select_val, set_select_val) = signal("th".to_string());
+    let (radio_val, set_radio_val) = signal("monthly".to_string());
+    let (range, set_range) = signal((String::new(), String::new()));
 
     view! {
         <Card class="shadow-sm border-border">
@@ -118,6 +121,49 @@ pub fn FormShowcase() -> impl IntoView {
                             min=0.0
                             max=100.0
                         />
+                    </div>
+                </div>
+
+                // Label, Select, Radio, DateRangePicker
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
+                    <div class="space-y-1.5">
+                        <Label r#for="demo-select">"Label + Select (ดรอปดาวน์)"</Label>
+                        <Select
+                            value=Signal::derive(move || select_val.get())
+                            on_change=Callback::new(move |v| set_select_val.set(v))
+                        >
+                            <SelectOption value="th">"ประเทศไทย"</SelectOption>
+                            <SelectOption value="jp">"ญี่ปุ่น"</SelectOption>
+                            <SelectOption value="sg">"สิงคโปร์"</SelectOption>
+                            <SelectOption value="xx" disabled=true>"ปิดใช้งาน"</SelectOption>
+                        </Select>
+                        <span class="text-[10px] text-muted-foreground block">{move || format!("เลือก: {}", select_val.get())}</span>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label>"Radio Group"</Label>
+                        <RadioGroup
+                            value=Signal::derive(move || radio_val.get())
+                            on_change=Callback::new(move |v| set_radio_val.set(v))
+                        >
+                            <RadioGroupItem value="daily" label="รายวัน" />
+                            <RadioGroupItem value="monthly" label="รายเดือน" />
+                            <RadioGroupItem value="never" label="ปิดใช้งาน" disabled=true />
+                        </RadioGroup>
+                        <span class="text-[10px] text-muted-foreground block">{move || format!("เลือก: {}", radio_val.get())}</span>
+                    </div>
+
+                    <div class="space-y-1.5 lg:col-span-2">
+                        <Label>"DateRangePicker (ช่วงวันที่)"</Label>
+                        <DateRangePicker
+                            from=Signal::derive(move || range.get().0)
+                            to=Signal::derive(move || range.get().1)
+                            on_change=Callback::new(move |r| set_range.set(r))
+                            aria_label="ช่วงวันที่"
+                        />
+                        <span class="text-[10px] text-muted-foreground block font-mono">
+                            {move || { let (f, t) = range.get(); format!("{} → {}", if f.is_empty() { "-" } else { &f }, if t.is_empty() { "-" } else { &t }) }}
+                        </span>
                     </div>
                 </div>
             </CardContent>

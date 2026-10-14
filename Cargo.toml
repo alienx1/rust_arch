@@ -45,12 +45,12 @@ ciborium = "0.2"
 thiserror = "2.0"
 
 # --- Database & ORM (PostgreSQL Wire Protocol / pgEdge) --------------------
-sea-orm = { version = "2.0.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm = { version = "2.0.4", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 
 # --- Cache, Storage & Event Streaming (Redpanda / Garage) ------------------
 redis = { version = "1.7", features = ["tokio-comp"] }
 rdkafka = { version = "0.39.0", features = ["tokio", "zstd"] }
-aws-sdk-s3 = { version = "1.149.0", default-features = false, features = ["default-https-client", "http-1x", "rt-tokio", "sigv4a"] }
+aws-sdk-s3 = { version = "1.152.0", default-features = false, features = ["default-https-client", "http-1x", "rt-tokio", "sigv4a"] }
 aws-config = "1.12"
 
 # --- Security, Identity & Cryptography (Ory Kratos / Tokens) ---------------
@@ -58,8 +58,8 @@ ory-kratos-client = "26.2.0"
 argon2 = { version = "0.6", features = ["std"] }
 jsonwebtoken = { version = "11.1.0", features = ["rust_crypto"] }
 subtle = "2.6.1"
-uuid = { version = "1.24.0", features = ["v7", "serde"] }
-chrono = { version = "0.4.44", features = ["serde"] }
+uuid = { version = "1.28.0", features = ["v7", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 
 # --- Outbound HTTP & Reporting --------------------------------------------
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "cookies"] }
@@ -74,15 +74,15 @@ dotenvy = "0.15.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = "0.34.0"
-opentelemetry = "0.33.0"
-opentelemetry_sdk = "0.33.0"
-opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic"] }
+opentelemetry = "0.33.1"
+opentelemetry_sdk = "0.33.1"
+opentelemetry-otlp = { version = "0.33.1", features = ["grpc-tonic"] }
 
 # --- Frontend (Leptos WebAssembly + shadcn/ui) -----------------------------
 leptos = { version = "0.8.20", features = ["csr"] }
 leptos_router = { version = "0.8.15" }
 tailwind_fuse = "0.3.2"
-lucide-leptos = "3.47.0"
+lucide-leptos = "3.56.0"
 gloo-net = "0.7.0"
 web-sys = { version = "0.3.77" }
 js-sys = "0.3.77"

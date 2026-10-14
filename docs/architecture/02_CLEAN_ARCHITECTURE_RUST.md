@@ -106,7 +106,7 @@ rust_arch_clean/
 │   ├── Cargo.toml
 │   └── src/
 │       ├── services/                             # SeaORM, Valkey, Redpanda, Garage S3, Quickwit
-│       ├── middleware/                           # Ory Kratos Session Verification Middleware
+│       ├── middleware/                           # auth/ audit/ cache/ http/ (grouped by purpose)
 │       └── lib.rs
 └── handler/                                      # 🔴 Circle 4: Presentation & Delivery
     ├── api/                                      # Axum REST Binaries

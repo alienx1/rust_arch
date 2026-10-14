@@ -99,7 +99,7 @@ Kratos uses the OWASP-recommended Argon2id parameters:
 
 ### 3.2 Axum Middleware Code Pattern
 ```rust
-// infrastructure/src/middleware/auth.rs
+// infrastructure/src/middleware/auth/kratos.rs
 use axum::{
     extract::Request,
     middleware::Next,

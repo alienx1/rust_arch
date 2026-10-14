@@ -22,7 +22,7 @@ pub trait Ntpg000Commands: Send + Sync {
     /// consumer: a message that cannot be stored is logged and dropped.
     async fn ingest(&self, message: NotificationMessage);
 
-    /// The user's notifications, newest first (`limit` default 20, at most 100), and how many are
+    /// The user's notifications, newest first (`limit` default 20, at most 300 = the per-user cap), and how many are
     /// unread in all
     async fn list(&self, username: &str, limit: Option<u64>) -> Result<NotificationListDto, Ntpg000Error>;
 

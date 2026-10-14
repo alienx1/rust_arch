@@ -13,7 +13,8 @@ use web_package::layout::{
 use web_package::ui::component::{Badge, BadgeVariant, Button, ButtonSize, ButtonVariant};
 
 use crate::pages::demo::components::{
-    ButtonShowcase, DataShowcase, FeedbackShowcase, FormShowcase, OverlayShowcase,
+    ButtonShowcase, DataShowcase, FeedbackShowcase, FormShowcase, LayerShowcase,
+    NavigationShowcase, OverlayShowcase,
 };
 use crate::pages::demo::providers::provide_demo_context;
 use crate::pages::demo::services::is_dev_env;
@@ -73,6 +74,8 @@ pub fn DemoScreen() -> impl IntoView {
                             ("feedback", "3. Feedback"),
                             ("data", "4. Data Display"),
                             ("overlays", "5. Overlays"),
+                            ("navigation", "6. Navigation"),
+                            ("layers", "7. Layers"),
                         ].into_iter().map(|(val, lbl)| {
                             let val_str = val.to_string();
                             let val_for_click = val.to_string();
@@ -100,6 +103,8 @@ pub fn DemoScreen() -> impl IntoView {
                                 {(tab == "overview" || tab == "feedback").then(|| view! { <FeedbackShowcase /> })}
                                 {(tab == "overview" || tab == "data").then(|| view! { <DataShowcase /> })}
                                 {(tab == "overview" || tab == "overlays").then(|| view! { <OverlayShowcase /> })}
+                                {(tab == "overview" || tab == "navigation").then(|| view! { <NavigationShowcase /> })}
+                                {(tab == "overview" || tab == "layers").then(|| view! { <LayerShowcase /> })}
                             </div>
                         }
                     }}

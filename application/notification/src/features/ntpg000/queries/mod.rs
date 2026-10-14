@@ -18,6 +18,9 @@ pub trait Ntpg000Queries: Send + Sync {
     /// Newest first
     async fn list(&self, recipient: &str, limit: u64) -> Result<Vec<NotificationModel>, Ntpg000Error>;
 
+    /// Deletes everything of `recipient` but the newest `keep` notifications; returns how many
+    async fn prune(&self, recipient: &str, keep: u64) -> Result<u64, Ntpg000Error>;
+
     async fn count_unread(&self, recipient: &str) -> Result<u64, Ntpg000Error>;
 
     /// Marks one notification of `recipient` as read; `false` when there is no such unread one

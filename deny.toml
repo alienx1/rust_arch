@@ -1,0 +1,20 @@
+# cargo-deny policy. Run: cargo deny check advisories
+# Every ignore below is a decision, not an oversight. Re-check them whenever `typst` is upgraded and
+# delete an entry once `cargo tree -i <crate>` no longer finds the crate.
+
+[advisories]
+ignore = [
+    # --- quick-xml 0.38.4 via typst-library -> hayagriva -> citationberg (bibliography parsing).
+    # PDF reports are rendered from our own Typst templates; no user-supplied XML is ever parsed.
+    # Fixed upstream only once typst moves to a patched quick-xml.
+    { id = "RUSTSEC-2026-0194", reason = "typst-only (citationberg); never parses user XML" },
+    { id = "RUSTSEC-2026-0195", reason = "typst-only (citationberg); never parses user XML" },
+
+    # --- unmaintained crates pulled in only by typst / typst-pdf (no known exploit)
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz: typst-pdf -> krilla (PDF writer)" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: typst-pdf -> krilla / fontdb" },
+    { id = "RUSTSEC-2025-0141", reason = "bincode 1.x: typst -> syntect" },
+    { id = "RUSTSEC-2024-0320", reason = "yaml-rust: typst -> syntect" },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: typst -> serde_yaml" },
+    { id = "RUSTSEC-2024-0436", reason = "paste: typst -> hayagriva -> biblatex (proc-macro, build time only)" },
+]

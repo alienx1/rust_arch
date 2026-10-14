@@ -31,7 +31,7 @@ use axum::{
     response::Response,
 };
 use http_body::Body as _;
-use super::kratos::{AuthenticatedUser, KratosConfig};
+use crate::middleware::auth::kratos::{AuthenticatedUser, KratosConfig};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;

@@ -65,7 +65,7 @@ flowchart TD
 | `ReadCache` / `ReadCaches` | `application/core/src/traits/read_cache.rs` | `through(key, ttl, load)`: hit → Valkey, miss → โหลดจาก DB แล้วเก็บ; ไม่แคช error; โหลดครั้งเดียวต่อ key ตอนมีหลาย request พร้อมกัน (single-flight); TTL ±10% (jitter); Valkey ล่ม/คืนค่าเพี้ยน → ข้ามไปอ่าน DB โดยระบบไม่ล่ม |
 | `CacheService::del_prefix` | `application/core/.../cache.rs`<br>`infrastructure/src/services/cache/del_prefix.rs` | ลบทั้ง namespace ด้วยคำสั่ง `SCAN` + `UNLINK` (ไม่บล็อก Redis/Valkey event loop) |
 | `InMemoryCache` | `application/core/src/traits/memory_cache.rs` | `CacheService` จำลองในหน่วยความจำ สำหรับ unit test หรือรัน standalone โดยไม่ต้องมี Valkey |
-| `invalidate_cache_on_write` | `infrastructure/src/middleware/cache_invalidation.rs` | Axum middleware: หลังคำขอเขียนสำเร็จ (2xx) ล้าง namespace ตามกฎของ path นั้น แล้วส่งสัญญาณให้ `CacheRefresher` เติมใหม่ (คำขอที่ถูกปฏิเสธ 4xx ไม่ล้าง; 5xx ล้างเผื่อกรณี partial mutation) |
+| `invalidate_cache_on_write` | `infrastructure/src/middleware/cache/cache_invalidation.rs` | Axum middleware: หลังคำขอเขียนสำเร็จ (2xx) ล้าง namespace ตามกฎของ path นั้น แล้วส่งสัญญาณให้ `CacheRefresher` เติมใหม่ (คำขอที่ถูกปฏิเสธ 4xx ไม่ล้าง; 5xx ล้างเผื่อกรณี partial mutation) |
 | `invalidation_rules()` | `handler/api/master/src/cache_policy.rs` | ตาราง Mapping "เขียนที่โปรแกรม/เส้นทางไหน → ล้าง namespace ไหนบ้าง" |
 
 > [!TIP] รูปแบบ Cache Key มาตรฐาน

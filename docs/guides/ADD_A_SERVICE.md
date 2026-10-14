@@ -96,7 +96,7 @@ tokio::spawn(async move {
 
 1. ประกาศ **port (trait)** ใน `application/core/src/traits/` — ภาษาของโดเมน ไม่ใช่ของ driver
 2. เขียน adapter ใน `infrastructure/src/services/<ชื่อ>/` implement port นั้น (ไฟล์ละหน้าที่: `get.rs`, `del_prefix.rs` …)
-3. middleware ที่ใช้ร่วมกันหลาย service อยู่ใน `infrastructure/src/middleware/`
+3. middleware ที่ใช้ร่วมกันหลาย service อยู่ใน `infrastructure/src/middleware/` แยกกลุ่มตามหน้าที่: `auth/` (api key, Kratos), `audit/`, `cache/`, `http/` (CORS, ภาษา, แปลข้อความ error) — ไฟล์ใหม่ใส่กลุ่มที่ตรง แล้ว re-export ใน `mod.rs` ของกลุ่มและของ `middleware/`
 4. `application/*` **ห้าม** import driver ตรง ๆ
 
 ## 6. เช็กลิสต์

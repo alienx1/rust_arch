@@ -36,6 +36,14 @@ impl Ntpg000Queries for MemoryNotifications {
         mine.truncate(limit as usize);
         Ok(mine)
     }
+    async fn prune(&self, recipient: &str, keep: u64) -> Result<u64, Ntpg000Error> {
+        let mut rows = self.rows.lock().unwrap();
+        let mut mine: Vec<_> = rows.iter().filter(|r| r.recipient == recipient).map(|r| (r.created_at, r.id)).collect();
+        mine.sort_by(|a, b| b.cmp(a));
+        let stale: Vec<Uuid> = mine.into_iter().skip(keep as usize).map(|(_, id)| id).collect();
+        rows.retain(|r| !stale.contains(&r.id));
+        Ok(stale.len() as u64)
+    }
     async fn count_unread(&self, recipient: &str) -> Result<u64, Ntpg000Error> {
         Ok(self.rows.lock().unwrap().iter().filter(|r| r.recipient == recipient && r.read_at.is_none()).count() as u64)
     }
@@ -202,4 +210,24 @@ async fn test_handler_ingests_readable_messages_and_skips_garbage() {
     let wire: serde_json::Value = serde_json::to_value(&m).unwrap();
     assert_eq!(wire["recipient"], "somchai");
     assert_eq!(wire["kind"], "report_ready");
+}
+
+#[tokio::test]
+async fn test_a_user_keeps_at_most_300_notifications_oldest_go_first() {
+    let r = rig();
+    let mut ids = Vec::new();
+    for i in 0..305u32 {
+        let id = Uuid::now_v7();
+        ids.push(id);
+        let at = format!("2026-10-12T{:02}:{:02}:{:02}Z", i / 3600, (i / 60) % 60, i % 60);
+        r.exec.ingest(message("somchai", id, &at)).await;
+    }
+    r.exec.ingest(message("somsri", Uuid::now_v7(), "2026-10-12T00:00:00Z")).await;
+
+    let rows = r.rows.rows.lock().unwrap();
+    let mine: Vec<_> = rows.iter().filter(|n| n.recipient == "somchai").collect();
+    assert_eq!(mine.len(), 300, "capped per user");
+    assert!(ids[..5].iter().all(|old| mine.iter().all(|n| n.id != *old)), "the 5 oldest were removed");
+    assert!(mine.iter().any(|n| n.id == ids[304]), "the newest is kept");
+    assert_eq!(rows.iter().filter(|n| n.recipient == "somsri").count(), 1, "another user is untouched");
 }

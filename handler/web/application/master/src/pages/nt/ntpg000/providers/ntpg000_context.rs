@@ -10,8 +10,8 @@ use crate::pages::nt::ntpg000::providers::use_notifications;
 use crate::pages::nt::ntpg000::services::Ntpg000Service;
 use crate::routes::program_paths::NTPG000;
 
-/// Notifications the list page shows
-const PAGE_LIMIT: u64 = 100;
+/// Notifications the list page loads: all of them (the server keeps at most 300 per user)
+const PAGE_LIMIT: u64 = 300;
 
 #[derive(Clone, Copy)]
 pub struct Ntpg000Context {

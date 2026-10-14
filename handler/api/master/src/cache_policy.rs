@@ -1,4 +1,4 @@
-//! Which writes clear which Valkey read caches (see `infrastructure::middleware::cache_invalidation`).
+//! Which writes clear which Valkey read caches (see `infrastructure::middleware::cache::cache_invalidation`).
 //!
 //! The namespaces are those of `application_core::traits::cache_ns`; a write to a program clears
 //! every cached read built from the data that program edits. When a new cached read is added to an

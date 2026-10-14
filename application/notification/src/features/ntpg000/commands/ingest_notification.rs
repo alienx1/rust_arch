@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::ntpg000_executor::Ntpg000CommandExecutor;
-use crate::features::ntpg000::models::NotificationModel;
+use crate::features::ntpg000::models::{MAX_NOTIFICATIONS_PER_USER, NotificationModel};
 
 const MAX_TITLE: usize = 255;
 const MAX_BODY: usize = 2000;
@@ -52,6 +52,11 @@ impl Ntpg000CommandExecutor {
         };
         match self.notifications.insert_if_absent(row.clone()).await {
             Ok(true) => {
+                match self.notifications.prune(&recipient, MAX_NOTIFICATIONS_PER_USER).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::debug!(%recipient, removed = n, "oldest notifications removed (per-user cap)"),
+                    Err(e) => tracing::error!(%recipient, error = %e, "notification cap not enforced"),
+                }
                 let pushed = crate::features::ntpg000::models::NotificationDto::from(row);
                 self.push
                     .push(

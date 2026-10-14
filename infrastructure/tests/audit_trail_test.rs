@@ -1,6 +1,6 @@
 //! Tests for the audit trail middleware: what is recorded, masked, converted and skipped.
 
-use infrastructure::middleware::audit_body::{BODY_STORE_MAX, body_to_text, cbor_to_json, headers_to_json, mask_json};
+use infrastructure::middleware::audit::audit_body::{BODY_STORE_MAX, body_to_text, cbor_to_json, headers_to_json, mask_json};
 use infrastructure::middleware::{AuditTrailState, audit_trail, derive_audit_target, should_audit};
 use application_core::traits::{AuditError, AuditEvent, AuditLogPort, AuditPage, AuditSearch};
 use async_trait::async_trait;

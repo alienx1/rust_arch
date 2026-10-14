@@ -113,7 +113,7 @@ tags:
 - **Frontend (Leptos)**: `pages/al/alpg000/` — `/al/alpg000` (ตารางพร้อมตัวกรอง: ช่วงเวลา, ชนิด, สถานะ 2xx–5xx, ผู้ใช้, method, โปรแกรม, path, ค้นข้อความ) และ `/al/alpg000/log/{id}` (รายละเอียด + request/response JSON); ตัวจับกิจกรรมที่ `src/audit/` (เปิดหน้า, คลิก, `track_action`) ส่งเป็นชุดทุก ~3 วินาที
 - **Backend API** (`/api/v1/al/alpg000`, ต้องมีสิทธิ์ READ): `GET /logs`, `GET /logs/{id}`, `GET /status`; ผู้ใช้ทุกคนส่งกิจกรรมของตัวเองได้ที่ `POST /api/v1/audit/events` (ใช้ session อย่างเดียว) ถ้า Quickwit ไม่พร้อมตอบ 503 `AUDIT_UNAVAILABLE`
 - **Application Layer**: `application/master/src/features/al/alpg000/`; port `AuditLogPort` ที่ `application/core`
-- **Infrastructure Layer**: `infrastructure/src/services/quickwit/` (`QuickwitAuditLog`: คิว + flusher + query builder); middleware `infrastructure/src/middleware/audit_trail.rs`
+- **Infrastructure Layer**: `infrastructure/src/services/quickwit/` (`QuickwitAuditLog`: คิว + flusher + query builder); middleware `infrastructure/src/middleware/audit/audit_trail.rs`
 - **ข้อจำกัดการค้นหา**: `path` ค้นแบบ token/prefix (เช่น `dbpg004`) ไม่ใช่ substring ตัวอักษรใดก็ได้; ค้นข้อความถูกตัดคำตาม tokenizer ของ Quickwit
 - **Tests**: `alpg000_test.rs`, `alpg000_router_test.rs`, `audit_trail_test.rs`, `infrastructure/tests/quickwit_audit_query_test.rs` (มี integration test ที่ยิง Quickwit จริงแบบ `--ignored`)
 
