@@ -4,6 +4,7 @@ mod api_client;
 mod app;
 mod access;
 mod audit;
+mod contacts;
 mod layouts;
 mod pages;
 mod routes;

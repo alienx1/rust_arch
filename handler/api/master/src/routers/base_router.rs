@@ -109,10 +109,14 @@ pub fn base_routes() -> Router<AppConnection> {
 /// being served unauthenticated.
 fn protected(routes: Router<AppConnection>, conn: &AppConnection) -> Router<AppConnection> {
     match &conn.kratos {
-        Some(kratos) => routes.route_layer(axum::middleware::from_fn_with_state(
-            kratos.clone(),
-            require_kratos_session,
-        )),
+        // Layers run outermost first: the session is checked, then the view scope is worked out
+        // for the signed-in account
+        Some(kratos) => routes
+            .route_layer(axum::middleware::from_fn_with_state(
+                conn.access_control.clone(),
+                crate::view_scope_layer::apply_view_scope,
+            ))
+            .route_layer(axum::middleware::from_fn_with_state(kratos.clone(), require_kratos_session)),
         None => routes.route_layer(axum::middleware::from_fn(
             |_req: axum::extract::Request, _next: axum::middleware::Next| async {
                 (StatusCode::SERVICE_UNAVAILABLE, "authentication provider not configured")
@@ -151,7 +155,8 @@ pub fn build_app_router(conn: AppConnection, prefix: &str) -> Router {
         .nest(super::ALPG001_PATH, protected(super::alpg001_routes(), &conn))
         .nest(super::AUDIT_EVENTS_PATH, protected(super::audit_events_routes(), &conn))
         .nest(super::ACCESS_PATH, protected(super::access_routes(), &conn))
-        .nest("/hooks", super::kratos_hook_routes());
+        .nest("/hooks", super::kratos_hook_routes())
+        .nest(super::AUTH_GATEWAY_PATH, super::auth_gateway_routes());
 
     // Root router: provides health & probes at both root and under the prefix
     Router::new()
@@ -174,6 +179,7 @@ pub fn build_app_router(conn: AppConnection, prefix: &str) -> Router {
         .nest(&format!("/api/v1{}", super::AUDIT_EVENTS_PATH), protected(super::audit_events_routes(), &conn))
         .nest(&format!("/api/v1{}", super::ACCESS_PATH), protected(super::access_routes(), &conn))
         .nest("/api/v1/hooks", super::kratos_hook_routes())
+        .nest(&format!("/api/v1{}", super::AUTH_GATEWAY_PATH), super::auth_gateway_routes())
         .nest("/api/v1/dashboard", protected(super::dashboard_routes(), &conn))
         .nest("/api/v1/localization", super::localization_routes())
         .nest("/api/v1/i18n", super::localization_routes())

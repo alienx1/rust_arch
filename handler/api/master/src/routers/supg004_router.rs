@@ -183,7 +183,7 @@ pub async fn scope_options_handler(
     Ok(wire.respond(commands.scope_options().await?))
 }
 
-/// Create account (identity + local row); the response carries the one-time recovery link
+/// Create account (identity + local row); the one-time link to set the first password is e-mailed
 pub async fn create_user_handler(
     State(commands): State<Arc<dyn Supg004Commands>>,
     State(access): State<Arc<dyn AccessControl>>,
@@ -196,7 +196,9 @@ pub async fn create_user_handler(
         Err(denied) => return Ok(denied),
     };
     let approve = can_approve(&access, &user).await;
-    Ok(wire.respond(commands.create_user(cmd, Some(actor.user_id), approve).await?))
+    let created =
+        application_core::mail_requester::scope(actor.username.clone(), commands.create_user(cmd, Some(actor.user_id), approve)).await?;
+    Ok(wire.respond(created))
 }
 
 /// Replace an account's assignments and/or switch it on/off
@@ -231,18 +233,36 @@ pub async fn delete_user_handler(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
-/// Issue a one-time password-setting link for the account
-pub async fn create_recovery_link_handler(
+/// E-mail the account holder a one-time link to set a new password (the old one keeps working)
+pub async fn send_password_mail_handler(
     State(commands): State<Arc<dyn Supg004Commands>>,
     State(access): State<Arc<dyn AccessControl>>,
     Extension(user): Extension<AuthenticatedUser>,
     wire: WireFormat,
     Path(id): Path<Uuid>,
 ) -> Result<Response, Supg004ApiError> {
-    if let Err(denied) = require(&access, &user, PROGRAM, PermissionAction::Write).await {
-        return Ok(denied);
-    }
-    Ok(wire.respond(commands.create_recovery_link(id).await?))
+    let actor = match require(&access, &user, PROGRAM, PermissionAction::Write).await {
+        Ok(actor) => actor,
+        Err(denied) => return Ok(denied),
+    };
+    let result = application_core::mail_requester::scope(actor.username, commands.send_password_mail(id)).await?;
+    Ok(wire.respond(result))
+}
+
+/// Require a new password: the account cannot sign in until it is set (sessions end, link mailed)
+pub async fn force_password_change_handler(
+    State(commands): State<Arc<dyn Supg004Commands>>,
+    State(access): State<Arc<dyn AccessControl>>,
+    Extension(user): Extension<AuthenticatedUser>,
+    wire: WireFormat,
+    Path(id): Path<Uuid>,
+) -> Result<Response, Supg004ApiError> {
+    let actor = match require(&access, &user, PROGRAM, PermissionAction::Write).await {
+        Ok(actor) => actor,
+        Err(denied) => return Ok(denied),
+    };
+    let result = application_core::mail_requester::scope(actor.username, commands.force_password_change(id)).await?;
+    Ok(wire.respond(result))
 }
 
 /// Sub-router for SUPG004 endpoints mounted into `AppConnection`.
@@ -253,7 +273,8 @@ pub fn supg004_routes() -> Router<AppConnection> {
         .route("/scope-options", get(scope_options_handler))
         .route("/users", get(list_users_handler).post(create_user_handler))
         .route("/users/{id}", get(get_user_handler).put(update_user_handler).delete(delete_user_handler))
-        .route("/users/{id}/recovery-link", post(create_recovery_link_handler))
+        .route("/users/{id}/password-mail", post(send_password_mail_handler))
+        .route("/users/{id}/force-password-change", post(force_password_change_handler))
 }
 
 /// Same routes with explicit state (useful for tests).
@@ -264,6 +285,7 @@ pub fn supg004_routes_with_state(state: Supg004State) -> Router {
         .route("/scope-options", get(scope_options_handler))
         .route("/users", get(list_users_handler).post(create_user_handler))
         .route("/users/{id}", get(get_user_handler).put(update_user_handler).delete(delete_user_handler))
-        .route("/users/{id}/recovery-link", post(create_recovery_link_handler))
+        .route("/users/{id}/password-mail", post(send_password_mail_handler))
+        .route("/users/{id}/force-password-change", post(force_password_change_handler))
         .with_state(state)
 }

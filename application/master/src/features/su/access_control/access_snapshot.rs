@@ -158,6 +158,26 @@ impl AccessSnapshot {
         grant_applies(&scopes, target).then(|| Actor { user_id: *user_id, username: username.clone() })
     }
 
+    /// The groups the account holds (and that are switched on) which grant `action` on
+    /// `program_code`
+    pub fn granting_groups(&self, program_code: &str, action: PermissionAction) -> Vec<Uuid> {
+        let granting: HashSet<Uuid> = self
+            .grants
+            .iter()
+            .filter(|g| g.program == program_code && g.action.eq_ignore_ascii_case(action.code()))
+            .map(|g| g.group)
+            .collect();
+        let mut groups: Vec<Uuid> = self
+            .holdings
+            .iter()
+            .map(|(g, _)| *g)
+            .filter(|g| granting.contains(g) && self.active_groups.contains(g))
+            .collect();
+        groups.sort();
+        groups.dedup();
+        groups
+    }
+
     /// Everything the account may do, anywhere: program code -> actions
     pub fn permissions(&self) -> BTreeMap<String, BTreeSet<&'static str>> {
         let mut out: BTreeMap<String, BTreeSet<&'static str>> = BTreeMap::new();

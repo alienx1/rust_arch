@@ -5,7 +5,9 @@ pub mod access_router;
 pub mod alpg000_router;
 pub mod alpg001_router;
 pub mod audit_events_router;
+pub mod auth_gateway_router;
 pub mod base_router;
+pub mod contacts_router;
 pub mod dashboard_router;
 pub mod dbpg000_router;
 pub mod dbpg001_router;
@@ -34,6 +36,9 @@ pub use access_router::{ACCESS_PATH, AccessState, access_routes, access_routes_w
 pub use audit_events_router::{
     AUDIT_EVENTS_PATH, AuditEventsState, audit_events_routes, audit_events_routes_with_state,
     client_actor_of,
+};
+pub use auth_gateway_router::{
+    AUTH_GATEWAY_PATH, GatewayState, GatewayTarget, auth_gateway_routes, auth_gateway_routes_with_state,
 };
 pub use base_router::*;
 pub use dashboard_router::*;

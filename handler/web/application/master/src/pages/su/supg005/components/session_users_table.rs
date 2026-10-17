@@ -9,7 +9,7 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::{t_or, t_fmt};
-use web_package::ui::component::{
+use web_package::ui::component::{ConfirmButton, 
     Avatar, Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, DataColumn, DataTable,
     FilterChips, TableCell, TableRow,
 };
@@ -291,41 +291,37 @@ pub fn SessionUsersTable(
                                                                 let uid_btn = uid_for_revoke.clone();
                                                                 view! {
                                                                     <PermissionGate program="SUPG005" action=Action::Write>
-                                                                    <Button
-                                                                        variant=ButtonVariant::Outline
-                                                                        size=ButtonSize::Sm
-                                                                        class="text-xs h-8 gap-1 ml-auto whitespace-nowrap shadow-sm"
-                                                                        on_click=Callback::new({
+                                                                    <ConfirmButton
+                                                                        label=Signal::derive(move || t_or("supg005.table.reactivate", "เปิดใช้งานอีกครั้ง"))
+                                                                        confirm_text=Signal::derive(move || t_or("supg005.table.reactivate_confirm", "เปิดใช้งานบัญชีนี้อีกครั้ง?"))
+                                                                        class="text-xs h-8 ml-auto whitespace-nowrap shadow-sm"
+                                                                        on_confirm=Callback::new({
                                                                             let uid_btn = uid_btn.clone();
                                                                             move |_| {
                                                                                 ctx.reactivate_user.run(uid_btn.clone());
                                                                             }
                                                                         })
-                                                                    >
-                                                                        <span>{t_or("supg005.table.reactivate", "เปิดใช้งานอีกครั้ง")}</span>
-                                                                    </Button>
+                                                                    />
                                                                     </PermissionGate>
                                                                 }.into_any()
                                                             } else {
                                                                 let uid_btn = uid_for_revoke.clone();
                                                                 view! {
                                                                     <PermissionGate program="SUPG005" action=Action::Write>
-                                                                    <Button
+                                                                    <ConfirmButton
+                                                                        label=Signal::derive(move || t_or("supg005.table.suspend", "ระงับบัญชี"))
+                                                                        confirm_text=Signal::derive(move || t_or("supg005.table.suspend_confirm", "ระงับบัญชีนี้และเพิกถอนเซสชันทั้งหมด?"))
+                                                                        confirm_label=Signal::derive(move || t_or("supg005.table.suspend_do", "ยืนยันระงับ"))
                                                                         variant=ButtonVariant::Destructive
-                                                                        size=ButtonSize::Sm
-                                                                        class="text-xs h-8 gap-1 ml-auto whitespace-nowrap shadow-sm"
-                                                                        on_click=Callback::new({
+                                                                        class="text-xs h-8 ml-auto whitespace-nowrap shadow-sm"
+                                                                        destructive=true
+                                                                        on_confirm=Callback::new({
                                                                             let uid_btn = uid_btn.clone();
                                                                             move |_| {
                                                                                 ctx.suspend_user.run(uid_btn.clone());
                                                                             }
                                                                         })
-                                                                    >
-                                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                                            <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                                                        </svg>
-                                                                        <span>{t_or("supg005.table.suspend", "ระงับบัญชี")}</span>
-                                                                    </Button>
+                                                                    />
                                                                     </PermissionGate>
                                                                 }.into_any()
                                                             }}

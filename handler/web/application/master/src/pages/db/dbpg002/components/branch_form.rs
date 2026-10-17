@@ -6,7 +6,8 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::{localized, t_or};
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
+    ContactsEditor,
     Button, ButtonSize, ButtonVariant, Card, DeleteConfirmButton, CardContent, Checkbox, Input, Select, SelectOption,
     Spinner,
 };
@@ -198,6 +199,12 @@ pub fn BranchForm() -> impl IntoView {
                         label=t_or("dbpg002.form.active", "เปิดใช้งานในระบบ (Active)")
                     />
                 </div>
+                <ContactsEditor
+                    rows=ctx.contacts
+                    kinds=vec!["PHONE", "FAX", "EMAIL", "LINE", "TAX_ID"]
+                    disabled=Signal::derive(move || !can_write.get())
+                />
+
                 </fieldset>
 
                 <div class="flex items-center gap-2 pt-2">
@@ -220,17 +227,15 @@ pub fn BranchForm() -> impl IntoView {
                         {t_or("common.action.cancel", "ยกเลิก")}
                     </Button>
                     <PermissionGate program="DBPG002" action=Action::Write>
-                        <Button
-                            variant=ButtonVariant::Default
-                            size=ButtonSize::Sm
-                            on_click=Callback::new(on_submit)
-                        >
-                            {move || if ctx.is_saving.get() {
+                        <SaveConfirmButton
+                            label=Signal::derive(move || if ctx.is_saving.get() {
                                 t_or("dbpg002.form.saving", "กำลังบันทึก...")
                             } else {
                                 t_or("common.action.save", "บันทึกข้อมูล")
-                            }}
-                        </Button>
+                            })
+                            on_confirm=Callback::new(on_submit)
+                            busy=Signal::derive(move || ctx.is_saving.get())
+                        />
                     </PermissionGate>
                 </div>
             </CardContent>

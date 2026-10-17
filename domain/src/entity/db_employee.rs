@@ -17,6 +17,7 @@ pub struct Model {
     pub contact_group_id: Option<Uuid>,
     pub code: String,
     pub active: bool,
+    pub image_key: Option<String>,
     pub change_by: Option<Uuid>,
     pub row_version: i64,
 }

@@ -4,7 +4,8 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::t_or;
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
+    ContactsEditor, ImageField,
     Button, ButtonSize, ButtonVariant, DeleteConfirmButton, Card, CardContent, Checkbox, Input, Spinner,
 };
 
@@ -91,6 +92,16 @@ pub fn OrgForm() -> impl IntoView {
                     </div>
                 })}
 
+                <ImageField
+                    image_url=Signal::derive(move || ctx.editing.with(|e| e.as_ref().and_then(|x| x.image_url.clone())))
+                    saved=Signal::derive(move || ctx.editing.with(|e| e.is_some()))
+                    busy=ctx.is_image_busy
+                    can_write=can_write
+                    fallback=Signal::derive(move || ctx.editing.with(|e| e.as_ref().map(|x| x.code.clone()).unwrap_or_default()))
+                    on_upload=ctx.upload_image
+                    on_remove=ctx.remove_image
+                />
+
                 <fieldset class="contents" disabled=move || !can_write.get()>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div class="space-y-1.5">
@@ -107,12 +118,12 @@ pub fn OrgForm() -> impl IntoView {
 
                     <div class="space-y-1.5">
                         <label class="text-xs font-semibold text-muted-foreground">
-                            {t_or("dbpg001.org.field.tax_id", "เลขทะเบียนนิติบุคคล / Tax ID")}
+                            {t_or("dbpg001.org.field.tax_id", "เลขทะเบียนองค์กรในระบบ")}
                         </label>
                         <Input
                             value=Signal::derive(move || reg_no.get())
                             on_input=Callback::new(move |val| set_reg_no.set(val))
-                            placeholder=t_or("dbpg001.org.field.tax_id_placeholder", "เช่น 0105550000001")
+                            placeholder=t_or("dbpg001.org.field.tax_id_placeholder", "เลขที่ใช้ลงทะเบียนองค์กรกับระบบ เช่น 0000000001")
                             class="text-sm font-mono"
                         />
                     </div>
@@ -152,6 +163,12 @@ pub fn OrgForm() -> impl IntoView {
                     />
                 </div>
 
+                <ContactsEditor
+                    rows=ctx.contacts
+                    kinds=vec!["PHONE", "FAX", "EMAIL", "LINE", "TAX_ID"]
+                    disabled=Signal::derive(move || !can_write.get())
+                />
+
                 </fieldset>
 
                 <div class="flex items-center gap-2 pt-2">
@@ -172,13 +189,11 @@ pub fn OrgForm() -> impl IntoView {
                         {t_or("common.action.cancel", "ยกเลิก")}
                     </Button>
                     <PermissionGate program="DBPG001" action=Action::Write>
-                    <Button
-                        variant=ButtonVariant::Default
-                        size=ButtonSize::Sm
-                        on_click=Callback::new(on_submit)
-                    >
-                        {move || if ctx.is_saving.get() { t_or("dbpg001.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") }}
-                    </Button>
+                    <SaveConfirmButton
+                        label=Signal::derive(move || if ctx.is_saving.get() { t_or("dbpg001.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") })
+                        on_confirm=Callback::new(on_submit)
+                        busy=Signal::derive(move || ctx.is_saving.get())
+                    />
                     </PermissionGate>
                 </div>
             </CardContent>

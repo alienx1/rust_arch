@@ -8,10 +8,11 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::identity_rules::{is_valid_email, normalize_username, provider_error};
+use crate::features::su::account_security::{PasswordMailKind, PasswordMailResult};
 use super::supg004_executor::Supg004CommandExecutor;
 use crate::features::su::supg004::errors::Supg004Error;
 use crate::features::su::supg004::models::{
-    CreateUserCommand, CreateUserResultDto, RecoveryLinkDto, is_admin_group, su_user,
+    CreateUserCommand, CreateUserResultDto, is_admin_group, su_user,
 };
 use domain::entity::db_employee;
 
@@ -93,6 +94,8 @@ impl Supg004CommandExecutor {
             password_type: Set("argon2id".to_string()),
             created_time: Set(chrono::Utc::now().fixed_offset()),
             active: Set(cmd.active),
+            // No password yet: the account signs in only after setting one through the emailed link
+            must_change_password: Set(true),
             change_by: Set(actor_id),
             row_version: Set(1),
         }
@@ -118,13 +121,23 @@ impl Supg004CommandExecutor {
             .await?
             .ok_or_else(|| Supg004Error::Internal("Failed to retrieve created account".to_string()))?;
 
-        let (recovery_link, recovery_error) = match identity.create_recovery_link(&username).await {
-            Ok(link) => (Some(RecoveryLinkDto { url: link.url, expires_at: link.expires_at }), None),
-            Err(e) => {
-                warn!("Account {username} created but no recovery link could be issued: {e}");
-                (None, Some(e.to_string()))
-            }
+        // The first password is set through a link e-mailed to the new account holder. The account
+        // exists either way; when the mail cannot go out the result carries the link instead.
+        let password_mail = match &self.account_security {
+            Some(security) => match security.send_password_mail(id, PasswordMailKind::Setup).await {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!("Account {username} created but its password mail failed: {e}");
+                    PasswordMailResult { sent: false, sent_to: None, mail_error: Some(e.to_string()), recovery_link: None }
+                }
+            },
+            None => PasswordMailResult {
+                sent: false,
+                sent_to: None,
+                mail_error: Some("password mail is not configured".to_string()),
+                recovery_link: None,
+            },
         };
-        Ok(CreateUserResultDto { user, recovery_link, recovery_error })
+        Ok(CreateUserResultDto { user, password_mail })
     }
 }

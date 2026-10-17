@@ -13,6 +13,9 @@ pub struct OrganizationDto {
     pub name_th: String,
     pub name_en: String,
     pub company_count: u64,
+    /// Logo URL for `<img src>` (`None` = no image)
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }
 

@@ -79,6 +79,7 @@ pub fn EmployeeTable() -> impl IntoView {
                 let (page_no, limit) = (page.page, page.limit);
                 page.items.into_iter().enumerate().map(|(idx, e)| {
                     let for_edit = e.clone();
+                    let initial = e.full_name.chars().next().map(|c| c.to_string()).unwrap_or_default();
                     view! {
                         <TableRow class="hover:bg-muted/30 transition-colors">
                             <TableCell class="text-center font-mono text-xs text-muted-foreground">
@@ -87,7 +88,17 @@ pub fn EmployeeTable() -> impl IntoView {
                             <TableCell class="font-mono font-medium text-xs">
                                 <span class="px-2 py-0.5 rounded bg-muted/60 border border-border/40">{e.code.clone()}</span>
                             </TableCell>
-                            <TableCell class="font-semibold text-foreground text-xs">{e.full_name.clone()}</TableCell>
+                            <TableCell class="font-semibold text-foreground text-xs">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="h-8 w-8 shrink-0 rounded-full border border-border/60 bg-muted/40 flex items-center justify-center overflow-hidden text-[11px] font-bold text-muted-foreground">
+                                        {match e.image_url.clone() {
+                                            Some(url) => view! { <img src=url alt="" class="h-full w-full object-cover" loading="lazy" /> }.into_any(),
+                                            None => initial.clone().into_any(),
+                                        }}
+                                    </div>
+                                    {e.full_name.clone()}
+                                </div>
+                            </TableCell>
                             <TableCell>
                                 <div class="text-xs space-y-0.5">
                                     <div class="font-medium text-foreground">{e.department_name.clone()}</div>

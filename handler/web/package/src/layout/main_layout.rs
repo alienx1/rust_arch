@@ -12,7 +12,7 @@ use leptos_router::components::Outlet;
 use leptos_router::hooks::{use_location, use_navigate};
 
 use super::main_navigation::NavSection;
-use super::main_sidebar::MainSidebar;
+use super::main_sidebar::{BrandOverride, MainSidebar};
 use super::main_topbar::MainTopbar;
 use super::user_menu::UserMenuItem;
 
@@ -39,6 +39,15 @@ pub fn MainLayout(
     /// Entries of the user dropdown in the topbar (above "sign out").
     #[prop(optional, into)]
     user_menu_items: Signal<Vec<UserMenuItem>>,
+    /// Photo of the signed-in user for the topbar avatar.
+    #[prop(optional, into)]
+    user_image_url: Signal<Option<String>>,
+    /// Replaces the sidebar brand (name, subtitle, logo) while it is `Some`.
+    #[prop(optional, into)]
+    brand: Signal<Option<BrandOverride>>,
+    /// A control shown instead of the line under the brand name (e.g. the company switcher).
+    #[prop(optional, into)]
+    brand_subtitle_slot: Option<ViewFn>,
 ) -> impl IntoView {
     let auth = use_auth();
     let navigate = use_navigate();
@@ -120,6 +129,9 @@ pub fn MainLayout(
                     brand_subtitle=brand_subtitle.clone()
                     brand_initial=brand_initial.clone()
                     footer_label=footer_label.clone()
+                    brand=brand
+                    use_subtitle_slot=brand_subtitle_slot.is_some()
+                    brand_subtitle_slot=brand_subtitle_slot.clone().unwrap_or_else(|| ViewFn::from(|| ()))
                 />
             }
             header=move || {
@@ -134,6 +146,7 @@ pub fn MainLayout(
                         login_path=Some(login_path.clone())
                         actions=topbar_actions
                         user_menu_items=user_menu_items
+                        user_image_url=user_image_url
                     />
                 }
             }

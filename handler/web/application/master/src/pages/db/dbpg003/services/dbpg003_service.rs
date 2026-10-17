@@ -185,6 +185,17 @@ impl Dbpg003Service {
     }
 
     /// Hard delete; the server answers 409 (with its explanation) while the row is still referenced
+    /// `PUT` the raw image file (`image/*`), or `DELETE` the photo when `file` is `None`; answers the
+    /// updated employee
+    pub async fn set_employee_image(&self, id: &str, file: Option<(Vec<u8>, String)>) -> Result<EmployeeDto, String> {
+        let url = format!("{DBPG003_API}/employees/{id}/image");
+        let req = match file {
+            Some((bytes, content_type)) => self.http.put(&url).bytes(bytes, &content_type),
+            None => self.http.delete(&url),
+        };
+        Self::finish(req.send().await, &t_or("common.what.image", "รูปภาพ"), false)
+    }
+
     pub async fn delete_employee(&self, id: &str) -> Result<(), String> {
         ApiClient::new(DBPG003_API).delete(&format!("/employees/{id}"), &t_or("dbpg003.what.employee", "พนักงาน")).await
     }

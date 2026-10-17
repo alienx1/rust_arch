@@ -10,8 +10,9 @@ use application_master::features::db::dbpg001::{
 };
 use axum::{
     Extension, Json, Router,
-    extract::{FromRef, Path, State},
-    http::StatusCode,
+    body::Bytes,
+    extract::{DefaultBodyLimit, FromRef, Path, State},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::get,
 };
@@ -250,14 +251,129 @@ pub async fn delete_company_handler(
     commands.delete_company(id).await?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
+/// Largest request body of an image upload: a little above the 2 MB limit so the feature answers
+/// "too large" with a clear message instead of the generic body-limit error.
+const IMAGE_BODY_LIMIT: usize = 3 * 1024 * 1024;
+
+/// Programs whose users may see a logo: the detail forms (DBPG001) and the list screen (DBPG000)
+/// ... and everybody sees the logo of their own organization / company (the sidebar brand)
+async fn may_view_image(
+    access: &Arc<dyn AccessControl>,
+    user: &AuthenticatedUser,
+    id: Uuid,
+    company: bool,
+) -> Result<(), Response> {
+    let denied = match require(access, user, PROGRAM, PermissionAction::Read).await {
+        Ok(_) => return Ok(()),
+        Err(_) => match require(access, user, "DBPG000", PermissionAction::Read).await {
+            Ok(_) => return Ok(()),
+            Err(denied) => denied,
+        },
+    };
+    let own = match super::username_of(user) {
+        Some(name) => access.own_employee(&name).await.ok().flatten().is_some_and(|e| {
+            let unit = if company { e.company } else { e.organization };
+            unit.is_some_and(|u| u.id == id)
+        }),
+        None => false,
+    };
+    if own { Ok(()) } else { Err(denied) }
+}
+
+/// An image as the browser should receive it: the stored type, `nosniff`, private cache (the URL
+/// changes with every upload)
+fn image_response(image: application_master::features::db::dbpg001::StoredImage) -> Response {
+    let mut res = (StatusCode::OK, image.bytes).into_response();
+    let h = res.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(image.content_type));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=86400"));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    res
+}
+
+macro_rules! image_handlers {
+    ($get:ident, $put:ident, $delete:ident, $get_cmd:ident, $set_cmd:ident, $remove_cmd:ident, $company:expr) => {
+        /// Logo bytes
+        pub async fn $get(
+            State(commands): State<Arc<dyn Dbpg001Commands>>,
+            State(access): State<Arc<dyn AccessControl>>,
+            Extension(user): Extension<AuthenticatedUser>,
+            Path(id): Path<Uuid>,
+        ) -> Result<Response, Dbpg001ApiError> {
+            if let Err(denied) = may_view_image(&access, &user, id, $company).await {
+                return Ok(denied);
+            }
+            Ok(image_response(commands.$get_cmd(id).await?))
+        }
+
+        /// Replace the logo: the request body is the raw image file
+        pub async fn $put(
+            State(commands): State<Arc<dyn Dbpg001Commands>>,
+            State(access): State<Arc<dyn AccessControl>>,
+            Extension(user): Extension<AuthenticatedUser>,
+            wire: WireFormat,
+            Path(id): Path<Uuid>,
+            body: Bytes,
+        ) -> Result<Response, Dbpg001ApiError> {
+            if let Err(denied) = require(&access, &user, PROGRAM, PermissionAction::Write).await {
+                return Ok(denied);
+            }
+            Ok(wire.respond(commands.$set_cmd(id, body.to_vec()).await?))
+        }
+
+        /// Remove the logo
+        pub async fn $delete(
+            State(commands): State<Arc<dyn Dbpg001Commands>>,
+            State(access): State<Arc<dyn AccessControl>>,
+            Extension(user): Extension<AuthenticatedUser>,
+            wire: WireFormat,
+            Path(id): Path<Uuid>,
+        ) -> Result<Response, Dbpg001ApiError> {
+            if let Err(denied) = require(&access, &user, PROGRAM, PermissionAction::Write).await {
+                return Ok(denied);
+            }
+            Ok(wire.respond(commands.$remove_cmd(id).await?))
+        }
+    };
+}
+
+image_handlers!(
+    get_organization_image_handler,
+    put_organization_image_handler,
+    delete_organization_image_handler,
+    get_organization_image,
+    set_organization_image,
+    remove_organization_image,
+    false
+);
+image_handlers!(
+    get_company_image_handler,
+    put_company_image_handler,
+    delete_company_image_handler,
+    get_company_image,
+    set_company_image,
+    remove_company_image,
+    true
+);
+
 /// Sub-router for DBPG001 endpoints mounted into `AppConnection`.
 pub fn dbpg001_routes() -> Router<AppConnection> {
     Router::new()
+        .merge(super::contacts_router::dbpg001_contact_routes())
         .route("/organizations", get(list_organizations_handler).post(create_organization_handler))
         .route("/organizations/{id}", get(get_organization_handler).put(update_organization_handler).delete(delete_organization_handler))
         .route("/companies", axum::routing::post(create_company_handler))
         .route("/companies/types", get(list_company_types_handler))
         .route("/companies/{id}", get(get_company_handler).put(update_company_handler).delete(delete_company_handler))
+        .route(
+            "/organizations/{id}/image",
+            get(get_organization_image_handler).put(put_organization_image_handler).delete(delete_organization_image_handler),
+        )
+        .route(
+            "/companies/{id}/image",
+            get(get_company_image_handler).put(put_company_image_handler).delete(delete_company_image_handler),
+        )
+        .layer(DefaultBodyLimit::max(IMAGE_BODY_LIMIT))
 }
 
 /// Same routes with explicit state (useful for tests).
@@ -268,5 +384,14 @@ pub fn dbpg001_routes_with_state(state: Dbpg001State) -> Router {
         .route("/companies", axum::routing::post(create_company_handler))
         .route("/companies/types", get(list_company_types_handler))
         .route("/companies/{id}", get(get_company_handler).put(update_company_handler).delete(delete_company_handler))
+        .route(
+            "/organizations/{id}/image",
+            get(get_organization_image_handler).put(put_organization_image_handler).delete(delete_organization_image_handler),
+        )
+        .route(
+            "/companies/{id}/image",
+            get(get_company_image_handler).put(put_company_image_handler).delete(delete_company_image_handler),
+        )
+        .layer(DefaultBodyLimit::max(IMAGE_BODY_LIMIT))
         .with_state(state)
 }

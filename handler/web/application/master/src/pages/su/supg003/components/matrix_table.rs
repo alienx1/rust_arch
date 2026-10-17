@@ -7,7 +7,7 @@
 
 use web_package::core::i18n::{localized, t_or, t_fmt};
 use leptos::prelude::*;
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
     Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, Checkbox, DataColumn, DataTable,
     TableCell, TableRow,
 };
@@ -216,15 +216,12 @@ pub fn MatrixTable() -> impl IntoView {
             }
             actions=move || view! {
                 <Show when=move || can_write.get()>
-                <Button
-                    variant=ButtonVariant::Default
-                    size=ButtonSize::Sm
-                    class="h-9 text-xs shrink-0"
-                    disabled=Signal::derive(move || read_only.get() || !ctx.is_dirty.get() || ctx.is_saving.get())
-                    on_click=Callback::new(move |_| ctx.save.run(()))
-                >
-                    {move || if ctx.is_saving.get() { t_or("supg003.form.saving", "กำลังบันทึก...") } else if ctx.is_dirty.get() { t_or("supg003.matrix.save_dirty", "💾 บันทึกสิทธิ์") } else { t_or("supg003.matrix.save", "บันทึกสิทธิ์") }}
-                </Button>
+                <SaveConfirmButton
+                    label=Signal::derive(move || if ctx.is_saving.get() { t_or("supg003.form.saving", "กำลังบันทึก...") } else if ctx.is_dirty.get() { t_or("supg003.matrix.save_dirty", "💾 บันทึกสิทธิ์") } else { t_or("supg003.matrix.save", "บันทึกสิทธิ์") })
+                    on_confirm=Callback::new(move |_| ctx.save.run(()))
+                    busy=Signal::derive(move || ctx.is_saving.get())
+                    disabled=Signal::derive(move || read_only.get() || !ctx.is_dirty.get())
+                />
                 </Show>
             }
         >

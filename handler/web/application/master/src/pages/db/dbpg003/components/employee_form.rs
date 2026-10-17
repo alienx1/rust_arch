@@ -7,7 +7,8 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::{localized, t_or};
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
+    ContactsEditor, ImageField,
     Button, ButtonSize, ButtonVariant, Card, DeleteConfirmButton, CardContent, Checkbox, Input, Select, SelectOption,
     Spinner,
 };
@@ -194,6 +195,16 @@ pub fn EmployeeForm() -> impl IntoView {
                     </div>
                 })}
 
+                <ImageField
+                    image_url=Signal::derive(move || ctx.editing.with(|e| e.as_ref().and_then(|x| x.image_url.clone())))
+                    saved=Signal::derive(move || ctx.editing.with(|e| e.is_some()))
+                    busy=ctx.is_image_busy
+                    can_write=can_write
+                    fallback=Signal::derive(move || ctx.editing.with(|e| e.as_ref().map(|x| x.full_name.clone()).unwrap_or_default()))
+                    on_upload=ctx.upload_image
+                    on_remove=ctx.remove_image
+                />
+
                 <fieldset class="contents" disabled=move || !can_write.get()>
                 <div class="space-y-3">
                     <h3 class="text-sm font-semibold text-foreground">{t_or("dbpg003.form.section_org", "สังกัด (Organization)")}</h3>
@@ -288,6 +299,12 @@ pub fn EmployeeForm() -> impl IntoView {
                         label=t_or("dbpg003.form.active", "กำลังปฏิบัติงาน (Active)")
                     />
                 </div>
+                <ContactsEditor
+                    rows=ctx.contacts
+                    kinds=vec!["PHONE", "EMAIL", "LINE", "FAX", "ID_CARD"]
+                    disabled=Signal::derive(move || !can_write.get())
+                />
+
                 </fieldset>
 
                 <div class="flex items-center gap-2 pt-2">
@@ -310,17 +327,15 @@ pub fn EmployeeForm() -> impl IntoView {
                         {t_or("common.action.cancel", "ยกเลิก")}
                     </Button>
                     <PermissionGate program="DBPG003" action=Action::Write>
-                        <Button
-                            variant=ButtonVariant::Default
-                            size=ButtonSize::Sm
-                            on_click=Callback::new(on_submit)
-                        >
-                            {move || if ctx.is_saving.get() {
+                        <SaveConfirmButton
+                            label=Signal::derive(move || if ctx.is_saving.get() {
                                 t_or("dbpg003.form.saving", "กำลังบันทึก...")
                             } else {
                                 t_or("common.action.save", "บันทึกข้อมูล")
-                            }}
-                        </Button>
+                            })
+                            on_confirm=Callback::new(on_submit)
+                            busy=Signal::derive(move || ctx.is_saving.get())
+                        />
                     </PermissionGate>
                 </div>
             </CardContent>

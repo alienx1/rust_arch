@@ -23,6 +23,8 @@ pub fn MainTopbar(
     #[prop(optional, into)] actions: ViewFn,
     /// Entries of the user dropdown above "sign out" (e.g. my reports, notifications)
     #[prop(optional, into)] user_menu_items: Signal<Vec<UserMenuItem>>,
+    /// Photo of the signed-in user for the avatar
+    #[prop(optional, into)] user_image_url: Signal<Option<String>>,
 ) -> impl IntoView {
     let auth = use_auth();
     let pathname = use_location().pathname;
@@ -87,6 +89,7 @@ pub fn MainTopbar(
                                     email=email
                                     subtitle="Administrator"
                                     items=user_menu_items
+                                    image_url=user_image_url
                                     logout_label=t_or("common.action.logout", "ออกจากระบบ")
                                     on_logout=Callback::new(move |_| auth.logout())
                                 />

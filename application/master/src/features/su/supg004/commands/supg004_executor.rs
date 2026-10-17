@@ -11,11 +11,12 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::features::su::account_security::{AccountSecurityCommands, PasswordMailResult};
 use crate::features::su::supg004::commands::Supg004Commands;
 use crate::features::su::supg004::errors::Supg004Error;
 use crate::features::su::supg004::models::{
     CreateUserCommand, CreateUserResultDto, EmployeeOptionDto, EmployeeOptionsQuery,
-    GroupOptionDto, RecoveryLinkDto, ScopeOptionsDto, UpdateUserCommand, UserAccountDto, UserFilterQuery,
+    GroupOptionDto, ScopeOptionsDto, UpdateUserCommand, UserAccountDto, UserFilterQuery,
     UserPageDto,
 };
 use crate::features::su::supg004::queries::Supg004Queries;
@@ -30,6 +31,8 @@ pub struct Supg004CommandExecutor {
     pub(super) sessions: Arc<dyn Supg005Commands>,
     /// Valkey read-through for the rarely changing reads (off until `with_cache`)
     pub(super) caches: ReadCaches,
+    /// Password mails and the forced change (`None`: no mail can be sent)
+    pub(super) account_security: Option<Arc<dyn AccountSecurityCommands>>,
 }
 
 impl Supg004CommandExecutor {
@@ -39,7 +42,19 @@ impl Supg004CommandExecutor {
         identity: Option<Arc<dyn IdentityProvisioningPort>>,
         sessions: Arc<dyn Supg005Commands>,
     ) -> Self {
-        Self { queries, db, identity, sessions, caches: ReadCaches::disabled() }
+        Self { queries, db, identity, sessions, caches: ReadCaches::disabled(), account_security: None }
+    }
+
+    /// Sends the password mails of new accounts and runs the forced change
+    pub fn with_account_security(mut self, security: Arc<dyn AccountSecurityCommands>) -> Self {
+        self.account_security = Some(security);
+        self
+    }
+
+    pub(super) fn security(&self) -> Result<&Arc<dyn AccountSecurityCommands>, Supg004Error> {
+        self.account_security
+            .as_ref()
+            .ok_or_else(|| Supg004Error::IdentityProvider("password mail is not configured".to_string()))
     }
 
     /// Reads that change rarely are served from Valkey; writes clear them (see the cache-invalidation middleware)
@@ -96,8 +111,12 @@ impl Supg004Commands for Supg004CommandExecutor {
         self.update_user(id, cmd, actor_id, can_assign_admin).await
     }
 
-    async fn create_recovery_link(&self, id: Uuid) -> Result<RecoveryLinkDto, Supg004Error> {
-        self.create_recovery_link(id).await
+    async fn send_password_mail(&self, id: Uuid) -> Result<PasswordMailResult, Supg004Error> {
+        self.send_password_mail(id).await
+    }
+
+    async fn force_password_change(&self, id: Uuid) -> Result<PasswordMailResult, Supg004Error> {
+        self.force_password_change(id).await
     }
 
     async fn delete_user(&self, id: Uuid, actor_id: Option<Uuid>) -> Result<(), Supg004Error> {

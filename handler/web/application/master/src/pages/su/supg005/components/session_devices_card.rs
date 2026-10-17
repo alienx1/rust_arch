@@ -2,8 +2,8 @@
 
 use web_package::core::i18n::t_or;
 use leptos::prelude::*;
-use web_package::ui::component::{
-    Badge, BadgeVariant, Button, ButtonVariant, Card, CardContent, CardDescription, CardHeader,
+use web_package::ui::component::{ConfirmButton, 
+    Badge, BadgeVariant, ButtonVariant, Card, CardContent, CardDescription, CardHeader,
     CardTitle,
 };
 
@@ -15,7 +15,7 @@ pub fn SessionDevicesCard(devices: Vec<ActiveDeviceDto>) -> impl IntoView {
     let ctx = use_supg005();
     let (revoked_msg, set_revoked_msg) = signal(false);
 
-    let on_revoke_others = move |_| {
+    let on_revoke_others = move |()| {
         ctx.revoke_other_sessions.run(());
         set_revoked_msg.set(true);
     };
@@ -38,16 +38,15 @@ pub fn SessionDevicesCard(devices: Vec<ActiveDeviceDto>) -> impl IntoView {
                         </CardDescription>
                     </div>
 
-                    <Button
+                    <ConfirmButton
+                        label=Signal::derive(move || t_or("supg005.devices.revoke_others", "เพิกถอนเซสชันอุปกรณ์อื่นทั้งหมด"))
+                        confirm_text=Signal::derive(move || t_or("supg005.devices.revoke_others_confirm", "เพิกถอนเซสชันของอุปกรณ์อื่นทั้งหมดใช่หรือไม่?"))
+                        confirm_label=Signal::derive(move || t_or("supg005.devices.revoke_confirm", "ยืนยันเพิกถอน"))
                         variant=ButtonVariant::Destructive
-                        class="text-xs h-8 gap-1.5 self-start sm:self-auto"
-                        on_click=Callback::new(on_revoke_others)
-                    >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                            <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
-                        {t_or("supg005.devices.revoke_others", "เพิกถอนเซสชันอุปกรณ์อื่นทั้งหมด")}
-                    </Button>
+                        class="text-xs h-8 self-start sm:self-auto"
+                        destructive=true
+                        on_confirm=Callback::new(on_revoke_others)
+                    />
                 </div>
             </CardHeader>
             <CardContent class="pt-4 space-y-3">
@@ -115,19 +114,16 @@ pub fn SessionDevicesCard(devices: Vec<ActiveDeviceDto>) -> impl IntoView {
 
                                     {if !is_curr {
                                         view! {
-                                            <Button
-                                                variant=ButtonVariant::Outline
-                                                class="text-xs h-7 px-2 text-destructive hover:bg-destructive/10 hover:border-destructive/30 shrink-0 gap-1"
-                                                on_click=Callback::new(move |_| {
+                                            <ConfirmButton
+                                                label=Signal::derive(move || t_or("supg005.devices.revoke", "เพิกถอน"))
+                                                confirm_text=Signal::derive(move || t_or("supg005.devices.revoke_one_confirm", "เพิกถอนเซสชันนี้?"))
+                                                confirm_label=Signal::derive(move || t_or("supg005.devices.revoke_confirm", "ยืนยันเพิกถอน"))
+                                                class="text-xs h-7 px-2 text-destructive hover:bg-destructive/10 hover:border-destructive/30 shrink-0"
+                                                destructive=true
+                                                on_confirm=Callback::new(move |_| {
                                                     ctx.revoke_device.run((dev_uid.clone(), dev_id.clone()));
                                                 })
-                                            >
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                                <span>{t_or("supg005.devices.revoke", "เพิกถอน")}</span>
-                                            </Button>
+                                            />
                                         }.into_any()
                                     } else {
                                         view! { <span /> }.into_any()

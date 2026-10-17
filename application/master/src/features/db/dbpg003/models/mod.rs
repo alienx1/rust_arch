@@ -11,7 +11,9 @@ mod update_employee_command;
 
 pub use domain::entity::{db_employee, db_person_name, db_person_name_label};
 
-pub use crate::features::db::dbpg000::models::{ENGLISH_LANGUAGE_ID, THAI_LANGUAGE_ID};
+pub use crate::features::db::dbpg000::models::{
+    ENGLISH_LANGUAGE_ID, ImageOwner, StoredImage, THAI_LANGUAGE_ID, image_url,
+};
 pub use crate::features::db::dbpg002::models::CompanyOptionDto;
 
 pub use create_employee_command::CreateEmployeeCommand;

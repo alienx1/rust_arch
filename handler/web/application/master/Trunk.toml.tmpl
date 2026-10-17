@@ -16,10 +16,12 @@ watch = ["src", "../../package", "../../../../.env"]
 port = @@WEB_PORT@@
 open = false
 
-# Reverse proxy for Ory Kratos: same-origin, eliminating CORS and cross-site cookie issues
+# Reverse proxy for Ory Kratos: same-origin, eliminating CORS and cross-site cookie issues.
+# It goes through api-master's auth gateway, which counts failed sign-ins and locks the account
+# (security.login.* in su_configuration); everything else is passed to Kratos untouched.
 [[proxy]]
 rewrite = "/api/kratos/"
-backend = "@@KRATOS_URL@@/"
+backend = "@@MASTER_URL@@/api/v1/auth/kratos/"
 
 # Reverse proxy for the notification service (api-notification: list, mark as read, push stream)
 [[proxy]]

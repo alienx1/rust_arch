@@ -20,6 +20,8 @@ pub struct UserAccountDto {
     /// Groups held at scope units; empty for a legacy account without assignment rows
     pub assignments: Vec<UserAssignmentDto>,
     pub active: bool,
+    /// Cannot sign in until a new password is set through the emailed link
+    pub must_change_password: bool,
     /// RFC 3339
     pub created_time: String,
     pub row_version: i64,

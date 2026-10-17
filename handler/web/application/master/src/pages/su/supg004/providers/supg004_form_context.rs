@@ -1,6 +1,6 @@
 //! SUPG004 account form context: loads the account to edit and the group options, searches
 //! employees without an account, saves, and returns to the list. A newly created account stays
-//! on the page to show its one-time recovery link.
+//! on the page to show the outcome of its set-password mail.
 
 use web_package::core::i18n::t_or;
 use leptos::prelude::*;
@@ -10,7 +10,7 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 
 use crate::pages::su::supg004::models::{
-    CreateUserInput, CreateUserResultDto, EmployeeOptionDto, GroupOptionDto, ScopeOptionsDto, UpdateUserInput,
+    CreateUserInput, CreateUserResultDto, EmployeeOptionDto, GroupOptionDto, PasswordMailResultDto, ScopeOptionsDto, UpdateUserInput,
     UserAccountDto, UserFormInput,
 };
 use crate::pages::su::supg004::services::Supg004Service;
@@ -24,6 +24,11 @@ pub struct Supg004FormContext {
     pub scope_options: ReadSignal<ScopeOptionsDto>,
     pub employees: ReadSignal<Vec<EmployeeOptionDto>>,
     pub created: ReadSignal<Option<CreateUserResultDto>>,
+    /// Outcome of the last password mail asked for while editing
+    pub mail_outcome: ReadSignal<Option<PasswordMailResultDto>>,
+    /// The account cannot sign in until a new password is set
+    pub must_change: ReadSignal<bool>,
+    pub is_mailing: ReadSignal<bool>,
     pub is_loading: ReadSignal<bool>,
     pub is_saving: ReadSignal<bool>,
     pub is_deleting: ReadSignal<bool>,
@@ -32,6 +37,11 @@ pub struct Supg004FormContext {
     pub save: Callback<UserFormInput>,
     pub cancel: Callback<()>,
     pub delete: Callback<()>,
+    /// Mail a set-password link (reset); the old password keeps working
+    pub send_password_mail: Callback<()>,
+    /// Block sign-in until a new password is set, sign the user out everywhere and mail the link
+    pub force_password_change: Callback<()>,
+    pub dismiss_mail: Callback<()>,
 }
 
 /// Provides the account form context; `id` is `Some` when editing.
@@ -42,6 +52,9 @@ pub fn provide_supg004_form_context(id: Option<String>) -> Supg004FormContext {
     let (scope_options, set_scope_options) = signal(ScopeOptionsDto::default());
     let (employees, set_employees) = signal(Vec::<EmployeeOptionDto>::new());
     let (created, set_created) = signal(Option::<CreateUserResultDto>::None);
+    let (mail_outcome, set_mail_outcome) = signal(Option::<PasswordMailResultDto>::None);
+    let (must_change, set_must_change) = signal(false);
+    let (is_mailing, set_is_mailing) = signal(false);
     let (is_loading, set_is_loading) = signal(true);
     let (is_saving, set_is_saving) = signal(false);
     let (is_deleting, set_is_deleting) = signal(false);
@@ -67,7 +80,10 @@ pub fn provide_supg004_form_context(id: Option<String>) -> Supg004FormContext {
             }
             match id {
                 Some(id) => match s.fetch_user(&id).await {
-                    Ok(v) => set_editing.set(Some(v)),
+                    Ok(v) => {
+                        set_must_change.set(v.must_change_password);
+                        set_editing.set(Some(v))
+                    }
                     Err(e) => err = err.or(Some(e)),
                 },
                 None => match s.fetch_employees("").await {
@@ -119,6 +135,51 @@ pub fn provide_supg004_form_context(id: Option<String>) -> Supg004FormContext {
             });
         }
     });
+
+    let send_password_mail = Callback::new({
+        let service = service.clone();
+        let id = id.clone();
+        move |()| {
+            let Some(id) = id.clone() else { return };
+            let s = service.clone();
+            set_is_mailing.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = s.send_password_mail(&id).await;
+                set_is_mailing.set(false);
+                match res {
+                    Ok(r) => {
+                        track_action("SUPG004.password_mail", &id);
+                        set_mail_outcome.set(Some(r));
+                    }
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        }
+    });
+    let force_password_change = Callback::new({
+        let service = service.clone();
+        let id = id.clone();
+        move |()| {
+            let Some(id) = id.clone() else { return };
+            let s = service.clone();
+            set_is_mailing.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = s.force_password_change(&id).await;
+                set_is_mailing.set(false);
+                match res {
+                    Ok(r) => {
+                        track_action("SUPG004.force_password_change", &id);
+                        set_must_change.set(true);
+                        set_mail_outcome.set(Some(r));
+                    }
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        }
+    });
+    let dismiss_mail = Callback::new(move |()| set_mail_outcome.set(None));
 
     let save = Callback::new(move |input: UserFormInput| {
         let s = service.clone();
@@ -172,6 +233,9 @@ pub fn provide_supg004_form_context(id: Option<String>) -> Supg004FormContext {
         scope_options,
         employees,
         created,
+        mail_outcome,
+        must_change,
+        is_mailing,
         is_loading,
         is_saving,
         is_deleting,
@@ -180,6 +244,9 @@ pub fn provide_supg004_form_context(id: Option<String>) -> Supg004FormContext {
         save,
         cancel,
         delete,
+        send_password_mail,
+        force_password_change,
+        dismiss_mail,
     };
     provide_context(ctx);
     ctx

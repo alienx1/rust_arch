@@ -300,6 +300,7 @@ pub async fn delete_department_handler(
 /// Sub-router for DBPG002 endpoints mounted into `AppConnection`.
 pub fn dbpg002_routes() -> Router<AppConnection> {
     Router::new()
+        .merge(super::contacts_router::dbpg002_contact_routes())
         .route("/companies", get(list_company_options_handler))
         .route("/summary", get(get_summary_handler))
         .route("/branches/types", get(list_branch_types_handler))

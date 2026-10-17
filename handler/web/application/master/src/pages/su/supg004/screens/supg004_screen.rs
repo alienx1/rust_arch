@@ -1,6 +1,6 @@
 //! SUPG004 Screen (`/su/supg004`): user accounts
 //!
-//! The account table; a recovery link issued from a row is shown above it. Renders the standard
+//! The account table; Renders the standard
 //! layout with an empty table when the API is unreachable (or the account lacks READ on SUPG004).
 
 use leptos::prelude::*;
@@ -10,7 +10,7 @@ use web_package::layout::{
 };
 use web_package::ui::component::{StatusColor, StatusDot};
 
-use crate::pages::su::supg004::components::{RecoveryLinkPanel, UserTable};
+use crate::pages::su::supg004::components::{UserTable};
 use crate::pages::su::supg004::providers::provide_supg004_context;
 
 #[component]
@@ -23,7 +23,7 @@ pub fn Supg004Screen() -> impl IntoView {
                 <div>
                     <PageTitle>{move || t_or("supg004.title", "บัญชีผู้ใช้ (User Accounts)")}</PageTitle>
                     <PageDescription>
-                        {move || t_or("supg004.description", "สร้างบัญชีเข้าสู่ระบบให้พนักงาน กำหนดกลุ่มสิทธิ์ ระงับ/เปิดใช้งาน และออกลิงก์ตั้งรหัสผ่าน • รหัสโปรแกรม: SUPG004")}
+                        {move || t_or("supg004.description", "สร้างบัญชีเข้าสู่ระบบให้พนักงาน กำหนดกลุ่มสิทธิ์ ระงับ/เปิดใช้งาน และส่งอีเมลตั้งรหัสผ่าน • รหัสโปรแกรม: SUPG004")}
                     </PageDescription>
                 </div>
                 <PageActions>
@@ -39,11 +39,6 @@ pub fn Supg004Screen() -> impl IntoView {
                 {move || ctx.error.get().map(|err| view! {
                     <div class="p-3.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs shadow-sm mb-4">
                         <span class="font-medium">{err}</span>
-                    </div>
-                })}
-                {move || ctx.issued_link.get().map(|issued| view! {
-                    <div class="mb-4">
-                        <RecoveryLinkPanel username=issued.username link=issued.link on_close=ctx.dismiss_link />
                     </div>
                 })}
                 <UserTable />

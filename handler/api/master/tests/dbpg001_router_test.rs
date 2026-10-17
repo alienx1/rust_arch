@@ -4,11 +4,11 @@
 use api_master::routers::{DBPG001_PATH, Dbpg001State, dbpg001_routes_with_state};
 use application_master::features::db::dbpg001::{
     CompanyDto, CompanyTypeLookupDto, CreateCompanyCommand, CreateOrganizationCommand,
-    Dbpg001Commands, Dbpg001Error, OrganizationDto, UpdateCompanyCommand,
+    Dbpg001Commands, Dbpg001Error, OrganizationDto, StoredImage, UpdateCompanyCommand,
     UpdateOrganizationCommand,
 };
 use application_master::features::su::access_control::{
-    AccessControl, AccessError, Actor, PermissionAction,
+    AccessControl, AccessError, Actor, OwnEmployee, OwnUnit, PermissionAction,
 };
 use async_trait::async_trait;
 use axum::{Extension, Router};
@@ -18,6 +18,9 @@ use infrastructure::middleware::AuthenticatedUser;
 use std::sync::Arc;
 use tower::ServiceExt;
 use uuid::Uuid;
+
+/// First bytes of a PNG: all the mock needs to hand back
+const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// Id the mock reports as still referenced
 const IN_USE_ID: Uuid = Uuid::from_u128(0x1);
@@ -40,6 +43,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_en: "ARCH Organization".to_string(),
             company_count: 1,
             row_version: 1,
+            image_url: None,
         }])
     }
 
@@ -57,6 +61,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
                 name_en: "ARCH Organization".to_string(),
                 company_count: 1,
                 row_version: 1,
+                image_url: None,
             }))
         } else {
             Ok(None)
@@ -77,6 +82,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
                 name_th: "บริษัท ARCH จำกัด".to_string(),
                 name_en: "ARCH Company Limited".to_string(),
                 row_version: 1,
+                image_url: None,
             }))
         } else {
             Ok(None)
@@ -106,6 +112,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_en: cmd.name_en,
             company_count: 0,
             row_version: 1,
+            image_url: None,
         })
     }
 
@@ -124,6 +131,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_en: cmd.name_en,
             company_count: 0,
             row_version: cmd.row_version + 1,
+            image_url: None,
         })
     }
 
@@ -144,6 +152,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_th: cmd.name_th,
             name_en: cmd.name_en,
             row_version: 1,
+            image_url: None,
         })
     }
 
@@ -165,6 +174,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_th: cmd.name_th,
             name_en: cmd.name_en,
             row_version: cmd.row_version + 1,
+            image_url: None,
         })
     }
 
@@ -176,6 +186,23 @@ impl Dbpg001Commands for MockDbpg001Commands {
         } else {
             Err(Dbpg001Error::NotFound(id.to_string()))
         }
+    }
+
+    async fn get_organization_image(&self, id: Uuid) -> Result<StoredImage, Dbpg001Error> {
+        if id == self.org_id {
+            Ok(StoredImage { bytes: PNG.to_vec(), content_type: "image/png" })
+        } else {
+            Err(Dbpg001Error::NotFound(format!("{id} has no image")))
+        }
+    }
+
+    async fn set_organization_image(&self, id: Uuid, bytes: Vec<u8>) -> Result<OrganizationDto, Dbpg001Error> {
+        if bytes.len() > 10 {
+            return Err(Dbpg001Error::Validation("Image must be PNG, JPEG, GIF or WebP".to_string()));
+        }
+        let mut org = self.get_organization_by_id(id).await?.ok_or_else(|| Dbpg001Error::NotFound(id.to_string()))?;
+        org.image_url = Some(format!("/api/v1/db/dbpg001/organizations/{id}/image?v=abc"));
+        Ok(org)
     }
 
     async fn delete_company(&self, id: Uuid) -> Result<(), Dbpg001Error> {
@@ -201,7 +228,7 @@ impl AccessControl for MockAccess {
         program_code: &str,
         action: PermissionAction,
     ) -> Result<Option<Actor>, AccessError> {
-        assert_eq!(program_code, "DBPG001");
+        assert!(matches!(program_code, "DBPG001" | "DBPG000"));
         let allowed = match (username, action) {
             ("admin", _) => true,
             ("writer", PermissionAction::Read | PermissionAction::Write) => true,
@@ -210,7 +237,25 @@ impl AccessControl for MockAccess {
         };
         Ok(allowed.then(|| Actor { user_id: Uuid::nil(), username: username.to_string() }))
     }
+
+    /// `member` has no rights but belongs to the organization `MEMBER_ORG` and the company `MEMBER_COMPANY`
+    async fn own_employee(&self, username: &str) -> Result<Option<OwnEmployee>, AccessError> {
+        let unit = |id| OwnUnit { id, code: String::new(), name_th: String::new(), name_en: String::new(), image_url: None };
+        Ok((username == "member").then(|| OwnEmployee {
+            id: Uuid::nil(),
+            image_url: None,
+            organization: Some(unit(MEMBER_ORG)),
+            company: Some(unit(MEMBER_COMPANY)),
+            is_hq: false,
+            unlimited: false,
+            choices: vec![],
+            branches: vec![],
+        }))
+    }
 }
+
+const MEMBER_ORG: Uuid = Uuid::from_u128(0xA);
+const MEMBER_COMPANY: Uuid = Uuid::from_u128(0xB);
 
 fn user(username: &str) -> AuthenticatedUser {
     AuthenticatedUser {
@@ -448,4 +493,75 @@ async fn test_admin_can_delete() {
     let app = create_router_as("admin", id, id);
     let resp = app.oneshot(delete_request(&format!("/db/dbpg001/organizations/{id}"))).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn test_organization_image_is_served_with_a_safe_content_type() {
+    let org_id = Uuid::now_v7();
+    let app = create_router_as("reader", org_id, Uuid::now_v7());
+    let resp = app
+        .oneshot(Request::builder().uri(format!("/db/dbpg001/organizations/{org_id}/image")).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers()["content-type"], "image/png");
+    assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
+    assert!(resp.headers()["cache-control"].to_str().unwrap().starts_with("private"));
+    assert_eq!(&to_bytes(resp.into_body(), usize::MAX).await.unwrap()[..], &PNG[..]);
+}
+
+#[tokio::test]
+async fn test_organization_without_an_image_is_404() {
+    let app = create_router_as("reader", Uuid::now_v7(), Uuid::now_v7());
+    let resp = app
+        .oneshot(Request::builder().uri(format!("/db/dbpg001/organizations/{}/image", Uuid::now_v7())).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_uploading_an_image_needs_write_permission() {
+    let org_id = Uuid::now_v7();
+    let put = |bytes: &'static [u8]| {
+        Request::builder()
+            .uri(format!("/db/dbpg001/organizations/{org_id}/image"))
+            .method("PUT")
+            .header("content-type", "image/png")
+            .body(Body::from(bytes))
+            .unwrap()
+    };
+
+    let denied = create_router_as("reader", org_id, Uuid::now_v7()).oneshot(put(&PNG)).await.unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+
+    let ok = create_router_as("writer", org_id, Uuid::now_v7()).oneshot(put(&PNG)).await.unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(&to_bytes(ok.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(body["image_url"].as_str().unwrap().contains("/image?v="));
+
+    let bad = create_router_as("writer", org_id, Uuid::now_v7())
+        .oneshot(put(b"<svg onload=alert(1)></svg>"))
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_everybody_sees_the_logo_of_their_own_organization_and_company_only() {
+    // `member` has no right at all
+    let get = |app: Router, uri: String| async move {
+        app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap().status()
+    };
+    // own organization: allowed
+    let own = get(create_router_as("member", MEMBER_ORG, Uuid::now_v7()), format!("/db/dbpg001/organizations/{MEMBER_ORG}/image")).await;
+    assert_eq!(own, StatusCode::OK);
+
+    // somebody else's organization: forbidden
+    let other = get(create_router_as("member", Uuid::now_v7(), Uuid::now_v7()), format!("/db/dbpg001/organizations/{}/image", Uuid::now_v7())).await;
+    assert_eq!(other, StatusCode::FORBIDDEN);
+
+    // the company id is not an organization id
+    let mixed = get(create_router_as("member", MEMBER_ORG, Uuid::now_v7()), format!("/db/dbpg001/organizations/{MEMBER_COMPANY}/image")).await;
+    assert_eq!(mixed, StatusCode::FORBIDDEN);
 }

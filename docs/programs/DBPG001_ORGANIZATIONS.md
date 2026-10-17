@@ -100,7 +100,7 @@ graph LR
 |  * รหัสบริษัท (Code):        [ CMP001             ]   สถานะ: [X] เปิดใช้งาน (Active)                 |
 |  * ชื่อบริษัท (ภาษาไทย):     [ บริษัท เอบีซี เทรดดิ้ง จำกัด                                      ] |
 |  * ชื่อบริษัท (English):     [ ABC Trading Co., Ltd.                                            ] |
-|  * เลขผู้เสียภาษี (Tax ID):  [ 01055500001        ]  * สกุลเงินหลัก: [ THB - บาทไทย (฿)       ▼ ] |
+|  ช่องทางติดต่อ/Tax ID: ดูส่วน "ช่องทางติดต่อและเลขประจำตัว" ท้ายฟอร์ม      * สกุลเงินหลัก: [ THB - บาทไทย (฿)       ▼ ] |
 |  ทะเบียนการค้า (Reg No):     [ 01055500001        ]                                                |
 +----------------------------------------------------------------------------------------------------+
 |  ที่อยู่จดทะเบียน (Registered Address)                                                             |
@@ -120,7 +120,7 @@ graph LR
 | **รหัสบริษัท** | `db_company.code` | `VARCHAR(100)` | Required, Unique ภายใต้องค์กรเดียวกัน |
 | **ชื่อไทย** | `db_company_label.label` (TH) | `VARCHAR(255)` | Required |
 | **ชื่ออังกฤษ** | `db_company_label.label` (EN) | `VARCHAR(255)` | Required |
-| **Tax ID** | `db_company.tax_id` | `VARCHAR(20)` | Required, ตัวเลข 13 หลักสำหรับนิติบุคคลไทย |
+| **Tax ID** | ช่องทางติดต่อชนิด `TAX_ID` (`db_contact`) | — | ไม่ใช่คอลัมน์ของบริษัท: กรอกในส่วน "ช่องทางติดต่อและเลขประจำตัว" ของฟอร์ม (ดูหัวข้อ Contacts ด้านล่าง) |
 | **สกุลเงิน** | `db_company.currency_id` | `UUID` | Required, ผูกกับ `db_currency` |
 | **สถานะ** | `db_company.active` | `BOOLEAN` | Default: `true` |
 
@@ -146,6 +146,14 @@ graph LR
 - **Backend API (Axum 0.8)** — base `/api/v1/db/dbpg001`:
   - `GET /organizations` (ตัวเลือกองค์กรแม่), `GET /organizations/{id}`, `POST /organizations`, `PUT /organizations/{id}`
   - `GET /companies/types`, `GET /companies/{id}`, `POST /companies`, `PUT /companies/{id}`
+  - **โลโก้ / รูปภาพ** (`image_key` บน `db_organization` / `db_company`, ไฟล์อยู่ใน Garage S3 ที่ `images/<organizations|companies>/{id}/<uuidv7>.<ext>`):
+    `GET|PUT|DELETE /organizations/{id}/image` และ `/companies/{id}/image` — `PUT` รับไฟล์ดิบเป็น body (Content-Type `image/*`), ตอบ DTO ที่มี `image_url`; `GET` ตอบไบต์ของรูป (`nosniff`, `private` cache) ใช้สิทธิ์ `DBPG001` Read หรือ `DBPG000` Read, `PUT`/`DELETE` ต้อง Write
+    - รับเฉพาะ **PNG / JPEG / GIF / WebP ไม่เกิน 2 MB** ตัดสินจากไบต์แรกของไฟล์ (ไม่เชื่อ Content-Type ที่ client อ้าง) — **ไม่รับ SVG** เพราะฝัง script ได้
+    - อัปโหลดใหม่จะลบไฟล์เก่า, ลบ org/company จะลบไฟล์ด้วย; ไม่เพิ่ม `row_version` (ฟอร์มที่เปิดค้างยังบันทึกได้); URL มี `?v=<uuid ของไฟล์>` กัน browser ใช้รูปเก่า
+    - **แบรนด์ที่ sidebar**: มุมซ้ายบนแสดงโลโก้ + ชื่อองค์กร และชื่อบริษัทเป็นบรรทัดรอง ของ**พนักงานที่บัญชีผู้ใช้ผูกอยู่** (`su_user.employee_id` → `db_employee.organization_id` / `company_id`) มาจาก `GET /api/v1/access/me` (`organization`, `company`) ชื่อตามภาษาที่เลือก; ไม่มีโลโก้แสดงตัวอักษรแรก; บัญชีที่ไม่มีพนักงาน/องค์กรใช้แบรนด์ของแอปตามเดิม; ทุกบัญชีดูโลโก้ของ org/company ตัวเองได้โดยไม่ต้องมีสิทธิ์ Read
+    - เว็บ: คอมโพเนนต์ `ImageField` (`web_package::ui::component`) ในฟอร์ม org/company (พนักงานใช้ตัวเดียวกัน ดู DBPG003; ตัวเก็บรูปกลาง `application/master/src/features/db/image_object_store.rs`) (ต้องบันทึกก่อนจึงเพิ่มรูปได้) และโลโก้ในตารางบริษัทของ DBPG000
+  - **Contacts** (`GET|PUT /organizations/{id}/contacts`, `/companies/{id}/contacts`; ฟอร์มสาขาและพนักงานใช้แบบเดียวกันที่ `/db/dbpg002/branches/{id}/contacts`, `/db/dbpg003/employees/{id}/contacts`): โทรศัพท์ โทรสาร อีเมล ไลน์ **เลขประจำตัวผู้เสียภาษี (Tax ID)** ของนิติบุคคล/สาขา และ **เลขบัตรประชาชน** ของพนักงาน เก็บเป็นรายการใน contact group ของแถวนั้น (`contact_group_id` → `db_contact` ชนิดจาก lookup `contact_type`: `PHONE FAX EMAIL LINE TAX_ID ID_CARD`) `PUT` แทนที่ทั้งรายการ (ไม่เพิ่ม `row_version`) กฎ: `TAX_ID` เฉพาะ org/company/branch, `ID_CARD` เฉพาะพนักงาน, อีเมล/เบอร์โทรตรวจรูปแบบ, ซ้ำไม่ได้, ชนิดละ 1 ค่าหลัก (`default_contact`; ไม่ระบุ = รายการแรกของชนิด), ไม่เกิน 30 รายการ; อ่านต้อง Read ของโปรแกรม เขียนต้อง Write (พนักงาน: ตามขอบเขตแผนก) และอยู่ในขอบเขตการมองเห็น (ไม่งั้น 404) ฟอร์มส่งรายการพร้อมการกดบันทึกข้อมูล (`ContactsEditor` ใน `web_package`); ลบ org/company/พนักงาน/สาขาจะลบ contact group ด้วย
+  - **`registration_number`** คือเลขทะเบียนที่องค์กรลงทะเบียนกับ**ระบบนี้** ไม่ใช่เลขทะเบียนนิติบุคคล/Tax ID (Tax ID เป็น contact ชนิด `TAX_ID`)
   - `DELETE /organizations/{id}`, `DELETE /companies/{id}` (204): ลบจริงเฉพาะเมื่อไม่มีข้อมูลอื่นอ้างอิง (ลบ label ของแถวนั้นใน transaction เดียวกัน) มิฉะนั้นตอบ 409 `IN_USE` → ให้ปิดการใช้งาน (Active) แทน
   - Production-Ready: ยิงไปยัง Axum REST API จริง ไม่มีการจำลองผลลัพธ์เทียม (Mock Success) หากมีข้อผิดพลาดจะแจ้งเตือนผู้ใช้ทันที
   - Router: [`dbpg001_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/dbpg001_router.rs)

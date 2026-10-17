@@ -132,6 +132,9 @@ pub struct UserAccountDto {
     #[serde(default)]
     pub assignments: Vec<UserAssignmentDto>,
     pub active: bool,
+    /// The account cannot sign in until a new password is set
+    #[serde(default)]
+    pub must_change_password: bool,
     pub created_time: String,
     pub row_version: i64,
 }
@@ -176,16 +179,19 @@ impl GroupOptionDto {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RecoveryLinkDto {
-    pub url: String,
-    pub expires_at: Option<String>,
+pub struct PasswordMailResultDto {
+    pub sent: bool,
+    /// Masked address the mail went to (`s***@arch.local`)
+    pub sent_to: Option<String>,
+    pub mail_error: Option<String>,
+    /// Only present when the mail could not be sent: the administrator hands it over
+    pub recovery_link: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreateUserResultDto {
     pub user: UserAccountDto,
-    pub recovery_link: Option<RecoveryLinkDto>,
-    pub recovery_error: Option<String>,
+    pub password_mail: PasswordMailResultDto,
 }
 
 /// Values of the account form

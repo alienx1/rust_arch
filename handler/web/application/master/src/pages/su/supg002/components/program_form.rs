@@ -8,7 +8,7 @@
 use leptos::prelude::*;
 use crate::access::{Action, PermissionGate, can};
 use web_package::core::i18n::t_or;
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
     Button, ButtonSize, ButtonVariant, Card, CardContent, Checkbox, DeleteConfirmButton, Input, Select,
     SelectOption, Spinner,
 };
@@ -352,13 +352,11 @@ pub fn ProgramForm() -> impl IntoView {
                         {t_or("common.action.cancel", "ยกเลิก")}
                     </Button>
                     <PermissionGate program="SUPG002" action=Action::Write>
-                        <Button
-                        variant=ButtonVariant::Default
-                        size=ButtonSize::Sm
-                        on_click=Callback::new(on_submit)
-                    >
-                        {move || if ctx.is_saving.get() { t_or("supg002.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") }}
-                    </Button>
+                        <SaveConfirmButton
+                            label=Signal::derive(move || if ctx.is_saving.get() { t_or("supg002.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") })
+                            on_confirm=Callback::new(on_submit)
+                            busy=Signal::derive(move || ctx.is_saving.get())
+                        />
                     </PermissionGate>
                 </div>
             </CardContent>

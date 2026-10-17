@@ -62,6 +62,7 @@ uuid = { version = "1.28.0", features = ["v7", "serde"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 
 # --- Outbound HTTP & Reporting --------------------------------------------
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "webpki-roots"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "cookies"] }
 typst = "0.15"
 typst-pdf = "0.15"

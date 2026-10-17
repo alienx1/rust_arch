@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::features::db::dbpg003::commands::dbpg003_executor::Dbpg003CommandExecutor;
 use crate::features::db::dbpg003::errors::Dbpg003Error;
 use crate::features::db::dbpg003::models::{db_employee, db_person_name, db_person_name_label};
+use crate::features::db::contacts::delete_contact_group;
 use crate::features::referential_integrity::is_foreign_key_violation;
 
 impl Dbpg003CommandExecutor {
@@ -17,6 +18,8 @@ impl Dbpg003CommandExecutor {
             .await?
             .ok_or_else(|| Dbpg003Error::NotFound(id.to_string()))?;
         let person_id = existing.person_name_id;
+        let image_key = existing.image_key.clone();
+        let contact_group = existing.contact_group_id;
 
         let txn = self.db.begin().await?;
         let result = async {
@@ -28,6 +31,9 @@ impl Dbpg003CommandExecutor {
             db_person_name::Entity::delete_by_id(person_id)
                 .exec(&txn)
                 .await?;
+            if let Some(group) = contact_group {
+                delete_contact_group(&txn, group).await?;
+            }
             Ok::<(), sea_orm::DbErr>(())
         }
         .await;
@@ -35,6 +41,9 @@ impl Dbpg003CommandExecutor {
         match result {
             Ok(()) => {
                 txn.commit().await?;
+                if let Some(key) = image_key {
+                    self.forget_object(&key).await;
+                }
                 Ok(())
             }
             Err(err) => {

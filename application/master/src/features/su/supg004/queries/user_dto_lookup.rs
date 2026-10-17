@@ -118,6 +118,7 @@ impl DbSupg004Queries {
                     assignments: assignments.remove(&u.id).unwrap_or_default(),
                     username: u.username,
                     active: u.active,
+                    must_change_password: u.must_change_password,
                     created_time: u.created_time.to_rfc3339(),
                     row_version: u.row_version,
                 }

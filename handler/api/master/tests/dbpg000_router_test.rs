@@ -35,6 +35,7 @@ impl Dbpg000Commands for MockDbpg000Commands {
             name_en: "ARCH Organization".to_string(),
             company_count: 1,
             row_version: 1,
+            image_url: None,
         }])
     }
 
@@ -52,6 +53,7 @@ impl Dbpg000Commands for MockDbpg000Commands {
                 name_en: "ARCH Organization".to_string(),
                 company_count: 1,
                 row_version: 1,
+                image_url: None,
             }))
         } else {
             Ok(None)
@@ -74,6 +76,7 @@ impl Dbpg000Commands for MockDbpg000Commands {
             name_th: "บริษัท ARCH จำกัด".to_string(),
             name_en: "ARCH Company Limited".to_string(),
             row_version: 1,
+            image_url: None,
         }])
     }
 
@@ -91,6 +94,7 @@ impl Dbpg000Commands for MockDbpg000Commands {
                 name_th: "บริษัท ARCH จำกัด".to_string(),
                 name_en: "ARCH Company Limited".to_string(),
                 row_version: 1,
+                image_url: None,
             }))
         } else {
             Ok(None)

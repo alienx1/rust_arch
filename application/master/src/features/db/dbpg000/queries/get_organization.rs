@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg000::errors::Dbpg000Error;
 use crate::features::db::dbpg000::models::{
-    ENGLISH_LANGUAGE_ID, OrganizationDto, THAI_LANGUAGE_ID, db_company, db_organization,
-    db_organization_label,
+    ENGLISH_LANGUAGE_ID, ImageOwner, OrganizationDto, THAI_LANGUAGE_ID, db_company, db_organization,
+    db_organization_label, image_url,
 };
 
 use super::db_dbpg000_queries::DbDbpg000Queries;
@@ -52,6 +52,7 @@ impl DbDbpg000Queries {
             name_th,
             name_en,
             company_count: count,
+            image_url: image_url(ImageOwner::Organization, org.id, org.image_key.as_deref()),
             row_version: org.row_version,
         }))
     }

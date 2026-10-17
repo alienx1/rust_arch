@@ -50,6 +50,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_en: cmd.name_en,
             company_count: 0,
             row_version: 1,
+            image_url: None,
         })
     }
 
@@ -71,6 +72,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_en: cmd.name_en,
             company_count: 0,
             row_version: cmd.row_version + 1,
+            image_url: None,
         })
     }
 
@@ -94,6 +96,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_th: cmd.name_th,
             name_en: cmd.name_en,
             row_version: 1,
+            image_url: None,
         })
     }
 
@@ -118,6 +121,7 @@ impl Dbpg001Commands for MockDbpg001Commands {
             name_th: cmd.name_th,
             name_en: cmd.name_en,
             row_version: cmd.row_version + 1,
+            image_url: None,
         })
     }
 

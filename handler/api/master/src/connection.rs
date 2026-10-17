@@ -15,6 +15,9 @@ use application_master::features::db::dbpg000::{
     DbDbpg000Queries, Dbpg000CommandExecutor, Dbpg000Commands, Dbpg000Queries,
 };
 use application_master::features::su::access_control::{AccessControl, DbAccessControl};
+use application_master::features::su::account_security::{
+    AccountSecurityCommands, AccountSecurityExecutor, DbAccountSecurityQueries,
+};
 use application_master::features::su::supg001::{
     DbSupg001Queries, Supg001CommandExecutor, Supg001Commands, Supg001Queries,
 };
@@ -79,6 +82,8 @@ pub struct AppConnection {
     pub dashboard_commands: Arc<dyn DashboardCommands>,
     /// IAM commands interface
     pub supg005_commands: Arc<dyn Supg005Commands>,
+    /// Password mails, forced password change and the sign-in lock
+    pub account_security_commands: Arc<dyn AccountSecurityCommands>,
     /// DBPG000 (organizations & companies list) commands interface
     pub dbpg000_commands: Arc<dyn Dbpg000Commands>,
     /// DBPG001 (organization & company create/update) commands interface
@@ -87,6 +92,8 @@ pub struct AppConnection {
     pub dbpg002_commands: Arc<dyn Dbpg002Commands>,
     /// DBPG003 (employees) commands interface
     pub dbpg003_commands: Arc<dyn Dbpg003Commands>,
+    /// Contacts of organizations, companies, branches and employees
+    pub contact_commands: Arc<dyn application_master::features::db::contacts::ContactCommands>,
     /// DBPG004 (reference data) commands interface
     pub dbpg004_commands: Arc<dyn Dbpg004Commands>,
     /// DBPG005 (geography) commands interface
@@ -208,9 +215,25 @@ impl AppConnection {
             Arc::new(DbDbpg000Queries::new(db.connection().clone()));
         let dbpg000_commands: Arc<dyn Dbpg000Commands> =
             Arc::new(Dbpg000CommandExecutor::new(dbpg000_queries.clone()).with_cache(caches.clone()));
+        // Logos and photos live in Garage / S3 (`AWS_*`, `S3_BUCKET_NAME`); the client only connects on use
+        let image_content: Arc<dyn application_core::traits::ContentService> =
+            Arc::new(infrastructure::S3ContentService::new(infrastructure::s3_client_from_env().await));
+        let image_bucket = std::env::var("S3_BUCKET_NAME").unwrap_or_else(|_| "rust-arch-bucket".to_string());
+        let contact_commands: Arc<dyn application_master::features::db::contacts::ContactCommands> =
+            {
+                let mut executor = application_master::features::db::contacts::ContactCommandExecutor::new(db.connection().clone());
+                if let Some(k) = &kratos {
+                    executor = executor.with_identity(Arc::new(k.clone()));
+                }
+                Arc::new(executor)
+            };
         let dbpg001_queries = Arc::new(DbDbpg001Queries::new(dbpg000_queries));
         let dbpg001_commands: Arc<dyn Dbpg001Commands> =
-            Arc::new(Dbpg001CommandExecutor::new(dbpg001_queries, db.connection().clone()).with_cache(caches.clone()));
+            Arc::new(
+                Dbpg001CommandExecutor::new(dbpg001_queries, db.connection().clone())
+                    .with_cache(caches.clone())
+                    .with_images(image_content.clone(), image_bucket.clone()),
+            );
 
         // DBPG002 Commands
         let dbpg002_queries: Arc<dyn Dbpg002Queries> =
@@ -225,7 +248,8 @@ impl AppConnection {
             Arc::new(
                 Dbpg003CommandExecutor::new(dbpg003_queries, db.connection().clone())
                     .with_cache(caches.clone())
-                    .with_account_suspension(supg005_commands.clone()),
+                    .with_account_suspension(supg005_commands.clone())
+                    .with_images(image_content.clone(), image_bucket.clone()),
             );
 
         // DBPG004 Commands
@@ -269,6 +293,38 @@ impl AppConnection {
         let identity: Option<Arc<dyn IdentityProvisioningPort>> = kratos
             .clone()
             .map(|k| Arc::new(k) as Arc<dyn IdentityProvisioningPort>);
+        // Password mails, the forced password change and the sign-in lock (counters in Valkey, or in
+        // this process when Valkey is down)
+        let lock_store: Arc<dyn CacheService> = match &cache {
+            Some(c) => Arc::new(c.clone()),
+            None => Arc::new(application_core::traits::InMemoryCache::new()),
+        };
+        // Mail goes to the notification service through Redpanda (it sends it and retries); without a
+        // broker client this process sends it itself
+        let mail_service: Arc<dyn application_core::traits::MailService> =
+            match infrastructure::services::RedpandaEventService::new(
+                &env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string()),
+            ) {
+                Ok(events) => Arc::new(infrastructure::QueuedMailService::new(Arc::new(events))),
+                Err(e) => {
+                    warn!("Mail queue (Redpanda) not available, sending mail directly: {e}");
+                    Arc::new(infrastructure::ConfiguredMailService::new(db.connection().clone()))
+                }
+            };
+        let account_security: Arc<dyn AccountSecurityCommands> = {
+            let mut executor = AccountSecurityExecutor::new(
+                Arc::new(DbAccountSecurityQueries::new(db.connection().clone())),
+                lock_store,
+            )
+            .with_cache(caches.clone())
+            .with_mail(mail_service);
+            if let Some(k) = &kratos {
+                executor = executor
+                    .with_identity(Arc::new(k.clone()))
+                    .with_session_revocation(Arc::new(k.clone()));
+            }
+            Arc::new(executor)
+        };
         let supg004_commands: Arc<dyn Supg004Commands> = Arc::new(
             Supg004CommandExecutor::new(
                 supg004_queries,
@@ -276,7 +332,8 @@ impl AppConnection {
                 identity,
                 supg005_commands.clone(),
             )
-            .with_cache(caches.clone()),
+            .with_cache(caches.clone())
+            .with_account_security(account_security.clone()),
         );
 
         // ALPG000 Commands: audit log search + client event intake over the audit store
@@ -325,10 +382,12 @@ impl AppConnection {
             audit_log,
             dashboard_commands,
             supg005_commands,
+            account_security_commands: account_security,
             dbpg000_commands,
             dbpg001_commands,
             dbpg002_commands,
             dbpg003_commands,
+            contact_commands,
             dbpg004_commands,
             dbpg005_commands,
             dbpg006_commands,
@@ -462,5 +521,19 @@ impl axum::extract::FromRef<AppConnection> for Arc<dyn Alpg001Commands> {
 impl axum::extract::FromRef<AppConnection> for Arc<dyn Alpg000Commands> {
     fn from_ref(conn: &AppConnection) -> Self {
         conn.alpg000_commands.clone()
+    }
+}
+
+impl axum::extract::FromRef<AppConnection> for Arc<dyn AccountSecurityCommands> {
+    fn from_ref(conn: &AppConnection) -> Self {
+        conn.account_security_commands.clone()
+    }
+}
+
+/// The hooks take the account security commands as optional (a deployment without them still
+/// guards logins by the account flag)
+impl axum::extract::FromRef<AppConnection> for Option<Arc<dyn AccountSecurityCommands>> {
+    fn from_ref(conn: &AppConnection) -> Self {
+        Some(conn.account_security_commands.clone())
     }
 }

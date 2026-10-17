@@ -3,12 +3,14 @@
 pub mod cache;
 pub mod content;
 pub mod event;
+pub mod mail;
 pub mod notification;
 pub mod quickwit;
 pub mod sql_context;
 
 pub use cache::ValkeyCacheService;
 pub use content::{S3ContentService, s3_client_from_env};
+pub use mail::{QueuedMailService, SmtpMailService, ConfiguredMailService};
 pub use event::{RedpandaEventConsumer, RedpandaEventService};
 pub use notification::{RedpandaNotificationPublisher, SseNotificationHub};
 pub use quickwit::{QuickwitAuditLog, QuickwitConfig, spawn_data_change_shipper};

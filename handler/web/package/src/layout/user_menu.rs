@@ -36,6 +36,9 @@ pub fn UserMenu(
     /// Shown under the name in the panel header (falls back to `subtitle`)
     #[prop(optional, into)]
     email: String,
+    /// Photo shown in the avatar (the initial when `None`)
+    #[prop(optional, into)]
+    image_url: Signal<Option<String>>,
     #[prop(into)] items: Signal<Vec<UserMenuItem>>,
     #[prop(into)] logout_label: String,
     on_logout: Callback<()>,
@@ -46,6 +49,7 @@ pub fn UserMenu(
     dismiss_on_outside(root, move || open.get_untracked(), move || set_open.set(false));
     let initial = name.chars().next().unwrap_or('U').to_uppercase().to_string();
     let header_name = name.clone();
+    let header_initial = header_name.chars().next().unwrap_or('U').to_uppercase().to_string();
     let header_subtitle = if email.is_empty() { subtitle.clone() } else { email };
 
     view! {
@@ -57,7 +61,10 @@ pub fn UserMenu(
                 aria-expanded=move || open.get().to_string()
                 on:click=move |_| set_open.update(|o| *o = !*o)
             >
-                <Avatar fallback=initial class="h-8 w-8" />
+                {move || match image_url.get() {
+                    Some(url) => view! { <Avatar src=url fallback=initial.clone() class="h-8 w-8" /> }.into_any(),
+                    None => view! { <Avatar fallback=initial.clone() class="h-8 w-8" /> }.into_any(),
+                }}
                 <div class="hidden sm:flex flex-col text-left">
                     <span class="text-xs font-semibold text-foreground truncate max-w-[140px]">{name}</span>
                     <span class="text-[10px] text-muted-foreground">{subtitle}</span>
@@ -72,7 +79,10 @@ pub fn UserMenu(
                     role="menu"
                 >
                     <div class="flex items-center gap-2.5 px-2.5 py-2">
-                        <Avatar fallback=header_name.chars().next().unwrap_or('U').to_uppercase().to_string() class="h-9 w-9" />
+                        {let fb = header_initial.clone(); move || match image_url.get() {
+                            Some(url) => view! { <Avatar src=url fallback=fb.clone() class="h-9 w-9" /> }.into_any(),
+                            None => view! { <Avatar fallback=fb.clone() class="h-9 w-9" /> }.into_any(),
+                        }}
                         <div class="min-w-0">
                             <div class="truncate text-sm font-semibold">{header_name.clone()}</div>
                             <div class="truncate text-xs text-muted-foreground">{header_subtitle.clone()}</div>

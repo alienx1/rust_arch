@@ -1,5 +1,6 @@
 //! DBPG003 query: one page of employees matching the filter
 
+use application_core::view_scope;
 use sea_orm::{ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use uuid::Uuid;
 
@@ -10,6 +11,7 @@ use crate::features::db::dbpg003::models::{
     db_person_name_label,
 };
 use crate::features::db::dbpg003::queries::db_dbpg003_queries::DbDbpg003Queries;
+use crate::features::db::view_scope_filters::branch_data_condition;
 
 impl DbDbpg003Queries {
     pub(super) async fn list_employees(
@@ -17,6 +19,13 @@ impl DbDbpg003Queries {
         filter: EmployeeFilterQuery,
     ) -> Result<EmployeePageDto, Dbpg003Error> {
         let mut cond = Condition::all();
+        // What the request may look at comes first; the filters below can only narrow it further
+        if let Some(companies) = view_scope::companies() {
+            cond = cond.add(db_employee::Column::CompanyId.is_in(companies));
+        }
+        if let Some(visible) = branch_data_condition(db_employee::Column::BranchId, db_employee::Column::DepartmentId) {
+            cond = cond.add(visible);
+        }
         if let Some(v) = filter.company_id {
             cond = cond.add(db_employee::Column::CompanyId.eq(v));
         }

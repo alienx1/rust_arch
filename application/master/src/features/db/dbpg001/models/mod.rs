@@ -1,7 +1,8 @@
 //! DBPG001 models: write commands plus the read DTOs shared with `dbpg000`
 
 pub use crate::features::db::dbpg000::models::{
-    CompanyDto, CompanyTypeLookupDto, ENGLISH_LANGUAGE_ID, OrganizationDto, THAI_LANGUAGE_ID,
+    CompanyDto, CompanyTypeLookupDto, ENGLISH_LANGUAGE_ID, ImageOwner, MAX_IMAGE_BYTES, OrganizationDto,
+    StoredImage, THAI_LANGUAGE_ID, content_type_of_key, image_url, new_image_key, sniff_image,
     db_company, db_company_label, db_organization, db_organization_label,
 };
 use serde::{Deserialize, Serialize};

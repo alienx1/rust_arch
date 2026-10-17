@@ -16,6 +16,7 @@ pub struct Model {
     pub password_type: String,
     pub created_time: DateTimeWithTimeZone,
     pub active: bool,
+    pub must_change_password: bool,
     pub change_by: Option<Uuid>,
     pub row_version: i64,
 }

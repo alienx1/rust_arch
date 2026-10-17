@@ -11,7 +11,9 @@ pub struct Model {
     pub organization_id: Uuid,
     pub code: String,
     pub master_lookup_id: Uuid,
+    pub contact_group_id: Option<Uuid>,
     pub active: bool,
+    pub image_key: Option<String>,
     pub change_by: Option<Uuid>,
     pub row_version: i64,
 }

@@ -94,6 +94,8 @@ pub struct ReadCache {
     namespace: &'static str,
     /// Keys carry the language of the request (answers that follow `Accept-Language`)
     localized: bool,
+    /// Keys also carry what the request may look at (answers narrowed by the view scope)
+    scoped: bool,
     stats: Stats,
     /// Loads in progress per key: concurrent misses for one key run the database load once
     flights: Flights,
@@ -134,7 +136,7 @@ fn with_jitter(ttl_secs: u64) -> u64 {
 impl ReadCache {
     /// `cache = None` makes every read go to the database (cache off, tests)
     pub fn new(cache: Option<Arc<dyn CacheService>>, namespace: &'static str) -> Self {
-        Self { cache, namespace, localized: true, stats: Arc::default(), flights: Arc::default() }
+        Self { cache, namespace, localized: true, scoped: false, stats: Arc::default(), flights: Arc::default() }
     }
 
     pub fn disabled(namespace: &'static str) -> Self {
@@ -161,6 +163,14 @@ impl ReadCache {
             (true, request_language::Language::Thai) => "th",
             (true, request_language::Language::English) => "en",
         };
+        if self.scoped {
+            return format!(
+                "{}v1:{language}:{}:{name}:{:016x}",
+                Self::prefix(self.namespace),
+                crate::view_scope::signature(),
+                fnv1a(&args)
+            );
+        }
         format!("{}v1:{language}:{name}:{:016x}", Self::prefix(self.namespace), fnv1a(&args))
     }
 
@@ -332,7 +342,10 @@ impl ReadCaches {
 
     /// The cache of one namespace (see [`cache_ns`])
     pub fn ns(&self, namespace: &'static str) -> ReadCache {
-        ReadCache { cache: self.cache.clone(), namespace, localized: true, stats: self.stats.clone(), flights: self.flights.clone() }
+        // Organization structure and the dashboard are narrowed by the request's view scope, so
+        // their entries are kept per scope
+        let scoped = namespace == cache_ns::ORG || namespace == cache_ns::DASHBOARD;
+        ReadCache { cache: self.cache.clone(), namespace, localized: true, scoped, stats: self.stats.clone(), flights: self.flights.clone() }
     }
 
     /// Hits / misses / failures per namespace since start (for the periodic log line and tests)

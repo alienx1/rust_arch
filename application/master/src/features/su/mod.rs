@@ -1,6 +1,7 @@
 //! System `SU` (Security) programs, one module per program code.
 
 pub mod access_control;
+pub mod account_security;
 pub mod supg001;
 pub mod supg002;
 pub mod supg003;

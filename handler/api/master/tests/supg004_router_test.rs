@@ -3,12 +3,13 @@
 //! Located at `handler/api/master/tests/supg004_router_test.rs`.
 
 use api_master::routers::{SUPG004_PATH, Supg004State, supg004_routes_with_state};
+use application_master::features::su::account_security::PasswordMailResult;
 use application_master::features::su::access_control::{
     AccessControl, AccessError, Actor, PermissionAction,
 };
 use application_master::features::su::supg004::{
     CreateUserCommand, CreateUserResultDto, ScopeOptionDto, ScopeOptionsDto, UserAssignmentDto, EmployeeOptionDto, EmployeeOptionsQuery,
-    GroupOptionDto, RecoveryLinkDto, Supg004Commands, Supg004Error, UpdateUserCommand,
+    GroupOptionDto, Supg004Commands, Supg004Error, UpdateUserCommand,
     UserAccountDto, UserFilterQuery, UserPageDto,
 };
 use async_trait::async_trait;
@@ -65,6 +66,7 @@ fn account(username: &str) -> UserAccountDto {
             scope_path: "ORG › C1 › B1".to_string(),
         }],
         active: true,
+        must_change_password: false,
         created_time: "2026-10-09T00:00:00+00:00".to_string(),
         row_version: 1,
     }
@@ -122,11 +124,12 @@ impl Supg004Commands for MockCommands {
         }
         Ok(CreateUserResultDto {
             user: account(&cmd.username),
-            recovery_link: Some(RecoveryLinkDto {
-                url: "http://localhost:3000/recovery?token=abc".to_string(),
-                expires_at: None,
-            }),
-            recovery_error: None,
+            password_mail: PasswordMailResult {
+                sent: true,
+                sent_to: Some("n***@arch.local".to_string()),
+                mail_error: None,
+                recovery_link: None,
+            },
         })
     }
     async fn update_user(&self, _id: Uuid, cmd: UpdateUserCommand, _a: Option<Uuid>, _admin: bool) -> Result<UserAccountDto, Supg004Error> {
@@ -136,8 +139,20 @@ impl Supg004Commands for MockCommands {
         }
         Ok(account("somchai"))
     }
-    async fn create_recovery_link(&self, _id: Uuid) -> Result<RecoveryLinkDto, Supg004Error> {
-        Ok(RecoveryLinkDto { url: "http://localhost:3000/recovery?token=xyz".to_string(), expires_at: Some("2026-10-10T00:00:00Z".to_string()) })
+    async fn send_password_mail(&self, id: Uuid) -> Result<PasswordMailResult, Supg004Error> {
+        if id == Uuid::nil() {
+            return Err(Supg004Error::NotFound(id.to_string()));
+        }
+        Ok(PasswordMailResult { sent: true, sent_to: Some("s***@arch.local".to_string()), mail_error: None, recovery_link: None })
+    }
+    async fn force_password_change(&self, _id: Uuid) -> Result<PasswordMailResult, Supg004Error> {
+        // The mail server is down: the link comes back for the administrator to hand over
+        Ok(PasswordMailResult {
+            sent: false,
+            sent_to: Some("s***@arch.local".to_string()),
+            mail_error: Some("no mail server".to_string()),
+            recovery_link: Some("http://localhost:3000/recovery?token=xyz".to_string()),
+        })
     }
     async fn delete_user(&self, id: Uuid, actor: Option<Uuid>) -> Result<(), Supg004Error> {
         assert_eq!(actor, Some(Uuid::nil()), "the authorized user is passed as the actor");
@@ -244,7 +259,7 @@ async fn test_update_with_assignments_needs_write() {
 }
 
 #[tokio::test]
-async fn test_writes_need_write_and_return_the_recovery_link() {
+async fn test_writes_need_write_and_the_new_account_gets_its_password_mail() {
     let create = |u: &str| json_request("POST", "/su/supg004/users", create_body(u));
 
     assert_eq!(router("reader").oneshot(create("new")).await.unwrap().status(), StatusCode::FORBIDDEN);
@@ -252,13 +267,30 @@ async fn test_writes_need_write_and_return_the_recovery_link() {
     let (status, body) = status_and_json(router("writer").oneshot(create("new")).await.unwrap()).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["user"]["username"], "new");
-    assert!(body["recovery_link"]["url"].as_str().unwrap().contains("recovery"));
+    assert_eq!(body["password_mail"]["sent"], true);
+    assert!(body["password_mail"]["recovery_link"].is_null(), "the link is not handed out when the mail went");
 
-    let link = router("reader")
-        .oneshot(json_request("POST", &format!("/su/supg004/users/{}/recovery-link", Uuid::now_v7()), serde_json::json!({})))
+    // Mailing a link and forcing a change are writes
+    let post = |what: &str| json_request("POST", &format!("/su/supg004/users/{}/{what}", Uuid::now_v7()), serde_json::json!({}));
+    for what in ["password-mail", "force-password-change"] {
+        assert_eq!(router("reader").oneshot(post(what)).await.unwrap().status(), StatusCode::FORBIDDEN, "{what} is a write");
+    }
+    let (status, mailed) = status_and_json(router("writer").oneshot(post("password-mail")).await.unwrap()).await;
+    assert_eq!((status, &mailed["sent"], &mailed["sent_to"]), (StatusCode::OK, &serde_json::json!(true), &serde_json::json!("s***@arch.local")));
+
+    // The mail server is down: the administrator gets the link and the reason
+    let (status, forced) = status_and_json(router("writer").oneshot(post("force-password-change")).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(forced["sent"], false);
+    assert!(forced["recovery_link"].as_str().unwrap().contains("recovery"));
+    assert_eq!(forced["mail_error"], "no mail server");
+
+    // An unknown account is a 404
+    let missing = router("writer")
+        .oneshot(json_request("POST", &format!("/su/supg004/users/{}/password-mail", Uuid::nil()), serde_json::json!({})))
         .await
         .unwrap();
-    assert_eq!(link.status(), StatusCode::FORBIDDEN, "issuing a link is a write");
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

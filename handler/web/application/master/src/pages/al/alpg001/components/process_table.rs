@@ -3,8 +3,8 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::t_or;
-use web_package::ui::component::{
-    Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, DataColumn, DataTable, TableCell, TableRow,
+use web_package::ui::component::{ConfirmButton, 
+    Badge, BadgeVariant, ButtonVariant, DataColumn, DataTable, TableCell, TableRow,
 };
 
 use crate::pages::al::alpg000::components::audit_time_format::EventTime;
@@ -150,16 +150,15 @@ fn ProcessRow(process: ProcessDto) -> impl IntoView {
             </TableCell>
             <TableCell class="text-right">
                 {process.can_reprocess.then(|| view! {
-                    <Button
+                    <ConfirmButton
+                        label=Signal::derive(move || t_or("alpg001.action.reprocess", "ประมวลผลใหม่"))
+                        confirm_text=Signal::derive(move || t_or("alpg001.action.reprocess_confirm", "ประมวลผลรายการนี้ใหม่?"))
                         // A failed or stuck process is the one to act on; re-running a good one is secondary
                         variant=if ok { ButtonVariant::Ghost } else { ButtonVariant::Outline }
-                        size=ButtonSize::Sm
                         class="h-7 px-2 text-xs"
-                        disabled=Signal::derive(is_busy.clone())
-                        on_click=Callback::new(move |_| ctx.reprocess.run(for_action.clone()))
-                    >
-                        {t_or("alpg001.action.reprocess", "ประมวลผลใหม่")}
-                    </Button>
+                        busy=Signal::derive(is_busy.clone())
+                        on_confirm=Callback::new(move |_| ctx.reprocess.run(for_action.clone()))
+                    />
                 })}
             </TableCell>
         </TableRow>

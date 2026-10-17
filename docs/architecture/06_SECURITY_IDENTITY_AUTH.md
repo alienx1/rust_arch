@@ -179,3 +179,38 @@ erDiagram
 - Review relational database storage: [[05_DATA_CONSISTENCY_AND_STORAGE]]
 - Review event streaming for audit logs: [[07_EVENT_STREAMING_OBSERVABILITY]]
 - Review network port matrix: [[09_NETWORK_PORTS_AND_SECURITY_MATRIX]]
+
+---
+
+## Password mail, forced change and brute-force lock
+
+**Mail.** api-master does not talk to a mail server: it queues each mail on the Redpanda topic `mail-outbox` (key = recipient) and **api-notification** delivers it over SMTP (retrying twice, 5 s and 30 s later; a bad address or a missing `mail.smtp_url` is not retried). The topic keeps messages 1 hour (they hold one-time links) and is not indexed into Quickwit (`make topics`). Without a Redpanda client api-master falls back to sending directly. SMTP settings (`mail.smtp_url`, `mail.from` in `su_configuration`, read on every send — no restart needed). With the queue unreachable (or `mail.smtp_url` empty when sending directly) nothing is sent and the administrator gets the one-time link on screen instead; once the mail is queued the screen says "queued", and a later SMTP failure only shows in the api-notification log. Links come from the Kratos admin `POST /admin/recovery/link` (valid 24 h, single use); the user sets the password through Kratos' recovery → settings flow.
+
+| Action (SUPG004, needs Write) | Endpoint | Effect |
+|---|---|---|
+| Create user | `POST /users` | account created with `su_user.must_change_password = true`, set-password mail sent |
+| Send password e-mail | `POST /users/{id}/password-mail` | reset mail; the old password keeps working |
+| Force password change | `POST /users/{id}/force-password-change` | flag set, sessions revoked, mail sent; sign-in refused (message 4010002) until a new password is set |
+
+Both actions answer `{sent, sent_to (masked), mail_error, recovery_link}`; `recovery_link` is present only when the mail failed.
+
+The flag is checked by the Kratos login hook (`/hooks/login-guard`, after the password is right; it re-mails the link at most every `security.password.mail_resend_minutes`) and cleared by the Kratos settings hook `selfservice.flows.settings.after.password` → `/hooks/password-changed`. Both hooks need `X-Webhook-Secret` (= `KRATOS_WEBHOOK_SECRET`).
+
+**Brute force.** Kratos cannot count failures, so the web proxy sends `/self-service/*` through api-master's gateway `/api/v1/auth/kratos/*`. It counts a failure only when Kratos answers "invalid credentials" (4000006), keyed by the user name (unknown names count too, so the answer never reveals whether an account exists). After the limit the account is locked: the login page shows message 4010001 and Kratos is not asked at all, even for the right password. Counters live in Valkey under `authguard:` (not flushed by `make cache-flush`); if Valkey is down they fall back to process memory. A lookup failure refuses the attempt (fail closed). Production: the reverse proxy in front of Kratos' public API must route `/self-service/*` through the gateway, otherwise the lock is bypassed.
+
+Settings (`su_configuration`, category `security`, edited by SQL — no screen yet; `sql/87_su_configuration_seed.sql`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mail.smtp_url` | empty | SMTP server (`smtp://host:1025`, `smtps://user:pass@host:465`, `smtp://host:587?tls=required`) |
+| `mail.from` | `no-reply@arch.local` | sender |
+| `security.login.max_failed_attempts` | 5 | failures before the lock (0 = lock off) |
+| `security.login.attempt_window_minutes` | 15 | window the failures are counted in |
+| `security.login.lock_minutes` | 15 | how long the account stays locked |
+| `security.password.mail_resend_minutes` | 5 | minimum gap between automatic re-mails |
+
+**Sign-in e-mail follows the employee's contacts.** Saving an employee's contacts (`PUT /db/dbpg003/employees/{id}/contacts`) sets Kratos `traits.email` of their account to the default e-mail contact (first one when none is default); the change is made before the contacts are committed, so an address already used by another account is refused with `409 CONFLICT` and nothing is saved. A contact list without e-mail leaves the account alone. Because the e-mail can then differ from the user name, the Kratos web hooks now also send `traits.username` and the account is found by it (apply the updated `configmap.yaml` and restart Kratos; before that, hooks fall back to the e-mail's local part).
+
+**Mail templates.** The four password mails (`setup`, `reset`, `forced`, `required`) are templates in `su_configuration`, category `mail_template` (seed: `sql/89_su_configuration_mail_templates.sql`): `mail.template.<kind>.subject`, `.html`, `.text`, and `mail.template.app_name` (header of the mail, default `Arch`). Placeholders `{{username}}`, `{{link}}`, `{{hours}}`, `{{app_name}}`; in `.html` the values are HTML-escaped. A missing or empty row falls back to the built-in bilingual text. Templates are read through the cache (about a minute), so an edit shows up without a restart; the SMTP settings (`mail` category) are deliberately never read through the cache because they hold the password.
+
+If a queued mail cannot be delivered after the retries (SMTP refuses, no `mail.smtp_url`, bad address), the notification service puts a `mail_failed` notification (NTPG000, link `/su/supg004`, `data = {to (masked), reason}`) into the bell of the administrator who pressed the button; the requester travels in the queued message (`MailMessage.requested_by`, set from `application_core::mail_requester`). A holder who triggers the mail by signing in has no requester, so only the log shows it.

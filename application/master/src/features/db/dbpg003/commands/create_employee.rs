@@ -62,6 +62,7 @@ impl Dbpg003CommandExecutor {
             contact_group_id: Set(None),
             code: Set(code),
             active: Set(cmd.active),
+            image_key: Set(None),
             change_by: Set(actor_id),
             row_version: Set(1),
         }

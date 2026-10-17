@@ -11,10 +11,12 @@ use serde_json::Value;
 
 /// `kind` values of [`Notification`]
 pub mod notification_kind {
-    /// A report finished: `data` = `{job_id}`
+    /// A report finished: `data` = `{job_id, file_name, rows}`
     pub const REPORT_READY: &str = "report_ready";
-    /// A report failed: `data` = `{job_id}`
+    /// A report failed: `data` = `{job_id, reason}`
     pub const REPORT_FAILED: &str = "report_failed";
+    /// A mail the user asked for could not be delivered: `data` = `{to, reason}`
+    pub const MAIL_FAILED: &str = "mail_failed";
 }
 
 /// Redpanda topic the notification service consumes
@@ -29,9 +31,12 @@ pub struct Notification {
     /// UUIDv7
     pub id: String,
     pub kind: String,
+    /// Text in the sender's language: the fallback for clients that cannot translate `kind`
     pub title: String,
     pub body: String,
-    /// Kind specific payload (ids the web app needs to open the thing)
+    /// Kind specific payload: ids the web app needs to open the thing and the values of the text,
+    /// so the web app shows it in the user's language (`ntpg000.kind.<kind>.title` / `.body`,
+    /// `{name}` placeholders filled from here)
     pub data: Value,
     /// Web path the notification opens when clicked, e.g. `/rp/rppg000`
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -259,6 +259,8 @@ async fn test_job_streams_every_slice_into_one_file_and_notifies_the_requester()
     assert_eq!(sent.len(), 1);
     assert_eq!((sent[0].0.as_str(), sent[0].1.kind.as_str()), ("somchai", "report_ready"));
     assert_eq!(sent[0].1.data["job_id"], id.to_string());
+    assert_eq!(sent[0].1.data["rows"], 12, "the text values travel in `data` so the web app can translate");
+    assert!(sent[0].1.data["file_name"].as_str().unwrap().ends_with(".csv"));
 }
 
 #[tokio::test]
@@ -286,7 +288,9 @@ async fn test_a_store_failure_midway_fails_the_job_aborts_the_upload_and_notifie
     assert!(job.error.unwrap().contains("quickwit"));
     assert_eq!(r.storage.aborted.lock().unwrap().len(), 1, "half a file is not left behind");
     assert!(r.storage.objects.lock().unwrap().is_empty());
-    assert_eq!(r.notifier.sent.lock().unwrap()[0].1.kind, "report_failed");
+    let sent = r.notifier.sent.lock().unwrap();
+    assert_eq!(sent[0].1.kind, "report_failed");
+    assert!(sent[0].1.data["reason"].as_str().unwrap().contains("quickwit"));
 }
 
 #[tokio::test]

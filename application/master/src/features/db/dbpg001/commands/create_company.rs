@@ -57,6 +57,8 @@ impl Dbpg001CommandExecutor {
             code: Set(code),
             master_lookup_id: Set(cmd.master_lookup_id),
             active: Set(cmd.active),
+            contact_group_id: Set(None),
+            image_key: Set(None),
             change_by: Set(actor_id),
             row_version: Set(1),
         };

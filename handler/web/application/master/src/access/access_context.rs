@@ -40,11 +40,67 @@ impl Action {
     }
 }
 
+/// Organization or company of the account's employee
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct OwnUnitDto {
+    #[serde(default, deserialize_with = "crate::pages::db::dbpg000::models::deserialize_id")]
+    pub id: String,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub name_th: String,
+    #[serde(default)]
+    pub name_en: String,
+    /// Logo URL (`None` = no logo)
+    #[serde(default)]
+    pub image_url: Option<String>,
+}
+
+/// A branch of the switcher
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct OwnBranchDto {
+    #[serde(default, deserialize_with = "crate::pages::db::dbpg000::models::deserialize_id")]
+    pub id: String,
+    #[serde(default, deserialize_with = "crate::pages::db::dbpg000::models::deserialize_id")]
+    pub company_id: String,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub name_th: String,
+    #[serde(default)]
+    pub name_en: String,
+}
+
 /// `GET /me` answer
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct AccessMeDto {
     #[serde(default)]
     pub username: Option<String>,
+    /// Photo of the employee behind the account (topbar avatar)
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub organization: Option<OwnUnitDto>,
+    #[serde(default)]
+    pub company: Option<OwnUnitDto>,
+    /// Headquarters account: may see the whole organization
+    #[serde(default)]
+    pub is_hq: bool,
+    /// Sees the whole organization (headquarters, or a group assigned at the organization)
+    #[serde(default)]
+    pub unlimited: bool,
+    /// Companies the switcher offers
+    #[serde(default)]
+    pub companies: Vec<OwnUnitDto>,
+    /// The company the server limits this request to (`None` = all companies)
+    #[serde(default, deserialize_with = "deserialize_opt_id")]
+    pub selected_company_id: Option<String>,
+    /// Branches the switcher offers
+    #[serde(default)]
+    pub branches: Vec<OwnBranchDto>,
+    /// The branch the server limits this request to (`None` = all branches)
+    #[serde(default, deserialize_with = "deserialize_opt_id")]
+    pub selected_branch_id: Option<String>,
     /// Program code -> granted actions
     #[serde(default)]
     pub permissions: HashMap<String, Vec<String>>,
@@ -53,6 +109,21 @@ pub struct AccessMeDto {
 #[derive(Clone, Copy)]
 pub struct AccessContext {
     permissions: ReadSignal<Option<HashMap<String, Vec<String>>>>,
+    /// Photo URL of the signed-in account's employee (`None` = no photo)
+    pub image_url: ReadSignal<Option<String>>,
+    /// Organization and company of the account's employee: the sidebar brand
+    pub organization: ReadSignal<Option<OwnUnitDto>>,
+    pub company: ReadSignal<Option<OwnUnitDto>>,
+    /// Sees the whole organization: "all" in the switchers means everything
+    pub unlimited: ReadSignal<bool>,
+    /// Companies the topbar switcher offers
+    pub companies: ReadSignal<Vec<OwnUnitDto>>,
+    /// The company the app is looking at (`None` = all companies)
+    pub selected_company_id: ReadSignal<Option<String>>,
+    /// Branches the switcher offers
+    pub branches: ReadSignal<Vec<OwnBranchDto>>,
+    /// The branch the app is looking at (`None` = all branches)
+    pub selected_branch_id: ReadSignal<Option<String>>,
     /// Bumped on every background re-check; whatever depends on the rights (the menu) tracks it
     pub version: ReadSignal<u32>,
 }
@@ -76,11 +147,27 @@ impl AccessContext {
 pub fn provide_access_context() -> AccessContext {
     let auth = use_auth();
     let (permissions, set_permissions) = signal(Option::<HashMap<String, Vec<String>>>::None);
+    let (image_url, set_image_url) = signal(Option::<String>::None);
+    let (organization, set_organization) = signal(Option::<OwnUnitDto>::None);
+    let (company, set_company) = signal(Option::<OwnUnitDto>::None);
+    let (unlimited, set_unlimited) = signal(false);
+    let (companies, set_companies) = signal(Vec::<OwnUnitDto>::new());
+    let (selected_company_id, set_selected_company_id) = signal(Option::<String>::None);
+    let (branches, set_branches) = signal(Vec::<OwnBranchDto>::new());
+    let (selected_branch_id, set_selected_branch_id) = signal(Option::<String>::None);
     let (version, set_version) = signal(0u32);
 
     Effect::new(move |_| {
         if !auth.is_authenticated.get() {
             set_permissions.set(None);
+            set_image_url.set(None);
+            set_organization.set(None);
+            set_company.set(None);
+            set_unlimited.set(false);
+            set_companies.set(Vec::new());
+            set_selected_company_id.set(None);
+            set_branches.set(Vec::new());
+            set_selected_branch_id.set(None);
             return;
         }
         let _ = version.get(); // background re-check
@@ -94,6 +181,30 @@ pub fn provide_access_context() -> AccessContext {
                 return;
             };
             // Write only on a real change, so open pages are not re-rendered every 45 s
+            if organization.get_untracked() != me.organization {
+                set_organization.set(me.organization.clone());
+            }
+            if unlimited.get_untracked() != me.unlimited {
+                set_unlimited.set(me.unlimited);
+            }
+            if companies.get_untracked() != me.companies {
+                set_companies.set(me.companies.clone());
+            }
+            if branches.get_untracked() != me.branches {
+                set_branches.set(me.branches.clone());
+            }
+            if selected_branch_id.get_untracked() != me.selected_branch_id {
+                set_selected_branch_id.set(me.selected_branch_id.clone());
+            }
+            if selected_company_id.get_untracked() != me.selected_company_id {
+                set_selected_company_id.set(me.selected_company_id.clone());
+            }
+            if company.get_untracked() != me.company {
+                set_company.set(me.company.clone());
+            }
+            if image_url.get_untracked() != me.image_url {
+                set_image_url.set(me.image_url.clone());
+            }
             if permissions.get_untracked().as_ref() != Some(&me.permissions) {
                 set_permissions.set(Some(me.permissions));
             }
@@ -128,7 +239,18 @@ pub fn provide_access_context() -> AccessContext {
     });
     on_cleanup(move || focus_handle.remove());
 
-    let ctx = AccessContext { permissions, version };
+    let ctx = AccessContext {
+        permissions,
+        image_url,
+        organization,
+        company,
+        unlimited,
+        companies,
+        selected_company_id,
+        branches,
+        selected_branch_id,
+        version,
+    };
     provide_context(ctx);
     ctx
 }
@@ -141,4 +263,14 @@ pub fn use_access() -> AccessContext {
 pub fn can(program: &'static str, action: Action) -> Signal<bool> {
     let ctx = use_access();
     Signal::derive(move || ctx.can(program, action))
+}
+
+/// An optional id that arrives as a UUID (16 bytes in CBOR, a string in JSON) or null
+fn deserialize_opt_id<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    struct Id(#[serde(deserialize_with = "crate::pages::db::dbpg000::models::deserialize_id")] String);
+    Ok(Option::<Id>::deserialize(deserializer)?.map(|id| id.0))
 }

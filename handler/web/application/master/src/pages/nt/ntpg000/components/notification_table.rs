@@ -3,7 +3,7 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::t_or;
-use web_package::ui::component::{
+use web_package::ui::component::{ConfirmButton, 
     Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, ClientPaging, DataColumn, DataTable, FilterChips,
     TableCell, TableRow,
 };
@@ -36,7 +36,7 @@ pub fn NotificationTable() -> impl IntoView {
                 STATUS_READ => n.read,
                 _ => true,
             })
-            .filter(|n| q.is_empty() || n.title.to_lowercase().contains(&q) || n.body.to_lowercase().contains(&q))
+            .filter(|n| q.is_empty() || n.title_text().to_lowercase().contains(&q) || n.body_text().to_lowercase().contains(&q))
             .collect::<Vec<_>>()
     });
     let total = Signal::derive(move || filtered.with(|l| l.len() as u64));
@@ -88,14 +88,12 @@ pub fn NotificationTable() -> impl IntoView {
             total=total
             on_page=Callback::new(move |p| paging.set_page(p))
             actions=move || view! {
-                <Button
-                    variant=ButtonVariant::Outline
-                    size=ButtonSize::Sm
+                <ConfirmButton
+                    label=Signal::derive(move || t_or("ntpg000.bell.mark_read", "อ่านทั้งหมดแล้ว"))
+                    confirm_text=Signal::derive(move || t_or("ntpg000.bell.mark_read_confirm", "ทำเครื่องหมายว่าอ่านทุกรายการแล้ว?"))
                     class="h-9 text-xs"
-                    on_click=Callback::new(move |_| ctx.mark_all_read.run(()))
-                >
-                    {t_or("ntpg000.bell.mark_read", "อ่านทั้งหมดแล้ว")}
-                </Button>
+                    on_confirm=Callback::new(move |_| ctx.mark_all_read.run(()))
+                />
             }
             notice=move || view! {
                 {move || ctx.error.get().map(|e| view! {
@@ -120,6 +118,7 @@ fn NotificationRow(n: NotificationDto, number: u64) -> impl IntoView {
     let (dot, time) = (dot_class(&n.kind), local_time(&n.created_at));
     let unread = !n.read;
     let for_open = n.clone();
+    let (title_n, body_n) = (n.clone(), n.clone());
     view! {
         <TableRow class=if unread { "bg-[color-mix(in_oklch,var(--primary)_12%,transparent)] hover:bg-[color-mix(in_oklch,var(--primary)_20%,transparent)] transition-colors" } else { "hover:bg-muted/30 transition-colors" }>
             // The accent bar sits on the first cell (a row cannot carry its own border in a
@@ -130,8 +129,8 @@ fn NotificationRow(n: NotificationDto, number: u64) -> impl IntoView {
                 <div class="flex items-start gap-2">
                     <span class=format!("mt-1.5 h-2 w-2 shrink-0 rounded-full {dot}")></span>
                     <div>
-                        <div class=if unread { "font-bold text-foreground" } else { "font-medium text-muted-foreground" }>{n.title.clone()}</div>
-                        <div class=if unread { "text-foreground/80 break-all" } else { "text-muted-foreground break-all" }>{n.body.clone()}</div>
+                        <div class=if unread { "font-bold text-foreground" } else { "font-medium text-muted-foreground" }>{move || title_n.title_text()}</div>
+                        <div class=if unread { "text-foreground/80 break-all" } else { "text-muted-foreground break-all" }>{move || body_n.body_text()}</div>
                     </div>
                 </div>
             </TableCell>

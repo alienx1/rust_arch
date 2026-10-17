@@ -16,6 +16,9 @@ pub struct CompanyDto {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Logo URL for `<img src>` (`None` = no image)
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }
 

@@ -9,6 +9,7 @@ pub mod error_templates;
 pub mod event;
 pub mod event_consumer;
 pub mod identity;
+pub mod mail;
 pub mod notification;
 pub mod report_job;
 pub mod session;
@@ -27,6 +28,7 @@ pub use notification::{
     NotificationService, PushEvent, notification_kind,
 };
 pub use report_job::{REPORT_REQUESTS_TOPIC, REPORT_WORKER_GROUP, ReportJobMessage, report_kind};
+pub use mail::{MAIL_SERVICE_GROUP, MAIL_TOPIC, MailError, MailMessage, MailService, NoMailService};
 pub use identity::{IdentityError, IdentityProvisioningPort, NewIdentity, RecoveryLink};
 pub use session::{IdentitySessionInfo, SessionRevocationPort};
 pub use sql_context::SqlContext;

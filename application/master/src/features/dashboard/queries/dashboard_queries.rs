@@ -3,6 +3,7 @@ use crate::features::dashboard::models::{
     DashboardKpis, DashboardSummary, ModuleItem, ProgramItem,
 };
 use crate::features::dashboard::queries::DashboardQueries;
+use crate::features::db::view_scope_filters::{by_branch_data, by_branch_rows, by_company};
 use async_trait::async_trait;
 use domain::entity::{
     db_branch, db_company, db_department, db_district, db_employee, db_label, db_language,
@@ -25,11 +26,25 @@ impl DbDashboardQueries {
 #[async_trait]
 impl DashboardQueries for DbDashboardQueries {
     async fn fetch_summary(&self) -> Result<DashboardSummary, DashboardError> {
-        let companies = db_company::Entity::find().count(&self.db).await?;
-        let branches = db_branch::Entity::find().count(&self.db).await?;
+        let companies = by_company(db_company::Entity::find(), db_company::Column::Id).count(&self.db).await?;
+        let branches = by_branch_rows(by_company(db_branch::Entity::find(), db_branch::Column::CompanyId), db_branch::Column::Id)
+            .count(&self.db)
+            .await?;
         let organizations = db_organization::Entity::find().count(&self.db).await?;
-        let departments = db_department::Entity::find().count(&self.db).await?;
-        let employees = db_employee::Entity::find().count(&self.db).await?;
+        let departments = by_branch_data(
+            by_company(db_department::Entity::find(), db_department::Column::CompanyId),
+            db_department::Column::BranchId,
+            db_department::Column::Id,
+        )
+        .count(&self.db)
+        .await?;
+        let employees = by_branch_data(
+            by_company(db_employee::Entity::find(), db_employee::Column::CompanyId),
+            db_employee::Column::BranchId,
+            db_employee::Column::DepartmentId,
+        )
+        .count(&self.db)
+        .await?;
         let provinces = db_province::Entity::find().count(&self.db).await?;
         let districts = db_district::Entity::find().count(&self.db).await?;
         let sub_districts = db_sub_district::Entity::find().count(&self.db).await?;

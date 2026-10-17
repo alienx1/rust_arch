@@ -6,6 +6,7 @@
 //! - `menu_service` / `menu_context`: load the menu tree from the database (SUPG002)
 //! - `master_navigation`: maps the menu tree to sidebar sections
 
+pub mod company_switcher;
 pub mod master_layout;
 pub mod master_navigation;
 pub mod menu_context;

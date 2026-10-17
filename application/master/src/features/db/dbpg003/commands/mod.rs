@@ -7,12 +7,13 @@ use crate::features::db::dbpg003::errors::Dbpg003Error;
 use crate::features::db::dbpg003::models::{
     BranchOptionDto, CompanyOptionDto, CreateEmployeeCommand, Dbpg003SummaryDto,
     DepartmentOptionDto, EmployeeDto, EmployeeFilterQuery, EmployeePageDto, PrefixOptionDto,
-    UpdateEmployeeCommand,
+    StoredImage, UpdateEmployeeCommand,
 };
 
 mod create_employee;
 mod delete_employee;
 pub mod dbpg003_executor;
+mod employee_image;
 mod employee_input_rules;
 mod employee_reference_rules;
 mod get_employee_by_id;
@@ -66,4 +67,19 @@ pub trait Dbpg003Commands: Send + Sync {
     /// Delete an employee with its person name and labels; refused with `InUse` while a user
     /// account (or anything else) still references it
     async fn delete_employee(&self, id: Uuid) -> Result<(), Dbpg003Error>;
+
+    /// Replaces the employee's photo (PNG / JPEG / GIF / WebP, at most 2 MB, judged by content)
+    async fn set_employee_image(&self, _id: Uuid, _bytes: Vec<u8>) -> Result<EmployeeDto, Dbpg003Error> {
+        Err(Dbpg003Error::Internal("Image storage is not configured".to_string()))
+    }
+
+    /// Removes the employee's photo
+    async fn remove_employee_image(&self, _id: Uuid) -> Result<EmployeeDto, Dbpg003Error> {
+        Err(Dbpg003Error::Internal("Image storage is not configured".to_string()))
+    }
+
+    /// The employee's photo bytes; `NotFound` when there is none
+    async fn get_employee_image(&self, _id: Uuid) -> Result<StoredImage, Dbpg003Error> {
+        Err(Dbpg003Error::Internal("Image storage is not configured".to_string()))
+    }
 }

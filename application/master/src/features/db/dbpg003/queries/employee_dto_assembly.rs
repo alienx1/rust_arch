@@ -10,8 +10,9 @@ use crate::features::db::dbpg002::models::{
 use crate::features::db::dbpg002::queries::db_dbpg002_queries::fold_names;
 use crate::features::db::dbpg003::errors::Dbpg003Error;
 use crate::features::db::dbpg003::models::{
-    ENGLISH_LANGUAGE_ID, EmployeeDto, THAI_LANGUAGE_ID, db_employee, db_person_name,
+    ENGLISH_LANGUAGE_ID, EmployeeDto, ImageOwner, THAI_LANGUAGE_ID, db_employee, db_person_name,
     db_person_name_label,
+    image_url,
 };
 use crate::features::db::dbpg003::queries::db_dbpg003_queries::DbDbpg003Queries;
 use crate::features::localization::request_language::{Language, current, pick};
@@ -224,6 +225,7 @@ impl DbDbpg003Queries {
                     nickname_en: en.nickname,
                     active: e.active,
                     has_user_account: with_account.contains(&e.id),
+                    image_url: image_url(ImageOwner::Employee, e.id, e.image_key.as_deref()),
                     row_version: e.row_version,
                 }
             })

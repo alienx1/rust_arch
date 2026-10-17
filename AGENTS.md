@@ -96,6 +96,7 @@ pages/<feature>/
 ```
 - **STRICT BAN on generic files**: Use `<feature>_dto.rs`, `<feature>_service.rs`, `<feature>_context.rs`, `<widget_name>.rs`, `<feature>_screen.rs`.
 - **Tables**: list tables MUST use the shared `web_package::ui::component::DataTable` (header with search/refresh/actions, `FilterChips`, loading/empty states, numbered pagination) — same look as `/su/supg005`. Pages supply only `DataColumn`s and the `<TableRow>`s; do not hand-roll a `Card` + `Table` shell.
+- **Two-level decision for data-changing buttons**: every button that changes data (save, delete, suspend/reactivate, revoke, force change, send mail, re-process, mark all read ...) MUST ask for confirmation before it acts: use `web_package::ui::component::{ConfirmButton, SaveConfirmButton, DeleteConfirmButton}` (first click shows "are you sure?" in place, second click runs the action). Never call a mutating callback straight from `on_click`. Buttons that only navigate, filter, page, preview or download are exempt.
 - **Environment Gating for Static Demos**: Interactive demo / playground pages (`/demo`) must be conditionally rendered only in `localhost` or `dev` environments via `is_dev_env()`, both in route definitions and in `AppShell` sidebars.
 
 ---
@@ -167,5 +168,6 @@ make entity
 - **Clean Architecture Crate Mapping**: [`docs/architecture/02_CLEAN_ARCHITECTURE_RUST.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/architecture/02_CLEAN_ARCHITECTURE_RUST.md)
 - **Database & UUIDv7 Consistency**: [`docs/architecture/05_DATA_CONSISTENCY_AND_STORAGE.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/architecture/05_DATA_CONSISTENCY_AND_STORAGE.md)
 - **Valkey Read Cache & Invalidation**: [`docs/architecture/11_VALKEY_READ_CACHE.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/architecture/11_VALKEY_READ_CACHE.md)
+- **View Scope & Company Switcher (HQ overview / own-branch only)**: [`docs/architecture/12_VIEW_SCOPE_COMPANY_SWITCHER.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/architecture/12_VIEW_SCOPE_COMPANY_SWITCHER.md)
 - **Ory Kratos Auth & Security**: [`docs/architecture/06_SECURITY_IDENTITY_AUTH.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/architecture/06_SECURITY_IDENTITY_AUTH.md)
 - **Programs & Screens Catalogue**: [`docs/programs/00_INDEX.md`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/docs/programs/00_INDEX.md)

@@ -7,18 +7,22 @@ use crate::audit::track_action;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 use web_package::core::i18n::t_or;
+use web_package::ui::component::{ContactItem, read_image_file};
 
 use crate::pages::db::dbpg003::models::{
     BranchOptionDto, CompanyOptionDto, CreateEmployeeInput, DepartmentOptionDto, EmployeeDto,
     PrefixOptionDto, UpdateEmployeeInput,
 };
-use crate::pages::db::dbpg003::services::Dbpg003Service;
+use crate::contacts::{load_contacts, save_contacts};
+use crate::pages::db::dbpg003::services::{DBPG003_API, Dbpg003Service};
 use crate::routes::DBPG003;
 
 /// State of the employee form (`/db/dbpg003/employee[/:id]`)
 #[derive(Clone, Copy)]
 pub struct Dbpg003FormContext {
     pub editing: ReadSignal<Option<EmployeeDto>>,
+    /// Contacts of the employee (phone, e-mail, ID card ...), edited in the form and saved with it
+    pub contacts: RwSignal<Vec<ContactItem>>,
     pub companies: ReadSignal<Vec<CompanyOptionDto>>,
     pub branches: ReadSignal<Vec<BranchOptionDto>>,
     pub departments: ReadSignal<Vec<DepartmentOptionDto>>,
@@ -29,6 +33,11 @@ pub struct Dbpg003FormContext {
     pub is_saving: ReadSignal<bool>,
     pub error: ReadSignal<Option<String>>,
     pub is_deleting: ReadSignal<bool>,
+    /// A photo upload / removal is running
+    pub is_image_busy: ReadSignal<bool>,
+    /// Uploads the chosen file as the employee's photo (editing only)
+    pub upload_image: Callback<web_sys::File>,
+    pub remove_image: Callback<()>,
     pub save: Callback<CreateEmployeeInput>,
     pub delete: Callback<()>,
     pub cancel: Callback<()>,
@@ -45,6 +54,10 @@ pub fn provide_dbpg003_form_context(
     let (branches, set_branches) = signal(Vec::<BranchOptionDto>::new());
     let (departments, set_departments) = signal(Vec::<DepartmentOptionDto>::new());
     let (prefixes, set_prefixes) = signal(Vec::<PrefixOptionDto>::new());
+    let contacts = RwSignal::new(Vec::<ContactItem>::new());
+    if let Some(id) = id.clone() {
+        load_contacts(DBPG003_API, format!("/employees/{id}"), contacts);
+    }
     let (default_company_id, _) = signal(default_company_id);
     let (is_loading, set_is_loading) = signal(true);
     let (is_saving, set_is_saving) = signal(false);
@@ -93,6 +106,8 @@ pub fn provide_dbpg003_form_context(
         });
     }
 
+    let image_service = service.clone();
+    let image_id = id.clone();
     let delete_service = service.clone();
     let delete_id = id.clone();
     let delete = Callback::new(move |()| {
@@ -148,9 +163,15 @@ pub fn provide_dbpg003_form_context(
                 )),
                 (None, _) => s.create_employee(input).await,
             };
+            let res = match res {
+                Ok(saved) => save_contacts(DBPG003_API, &format!("/employees/{}", saved.id), &contacts.get_untracked())
+                    .await
+                    .map_err(|e| format!("{}: {e}", t_or("common.contact.saved_partly", "บันทึกข้อมูลแล้ว แต่บันทึกช่องทางติดต่อไม่สำเร็จ"))),
+                Err(e) => Err(e),
+            };
             set_is_saving.set(false);
             match res {
-                Ok(_) => {
+                Ok(()) => {
                     track_action("DBPG003.save", "");
                     cancel.run(())
                 }
@@ -159,7 +180,48 @@ pub fn provide_dbpg003_form_context(
         });
     });
 
+    let (is_image_busy, set_is_image_busy) = signal(false);
+    let upload_image = {
+        let (s, id) = (image_service.clone(), image_id.clone());
+        Callback::new(move |file: web_sys::File| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = match read_image_file(file).await {
+                    Ok(picked) => s.set_employee_image(&id, Some(picked)).await,
+                    Err(e) => Err(e),
+                };
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(employee) => set_editing.set(Some(employee)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+    let remove_image = {
+        let (s, id) = (image_service.clone(), image_id.clone());
+        Callback::new(move |()| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = s.set_employee_image(&id, None).await;
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(employee) => set_editing.set(Some(employee)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+
     let ctx = Dbpg003FormContext {
+        contacts,
+        is_image_busy,
+        upload_image,
+        remove_image,
         editing,
         companies,
         branches,

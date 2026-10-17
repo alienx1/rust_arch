@@ -71,7 +71,7 @@ impl CorsConfig {
         // 3. Allowed Headers (CORS_ALLOWED_HEADERS)
         let allowed_headers: Vec<HeaderName> = env::var("CORS_ALLOWED_HEADERS")
             .unwrap_or_else(|_| {
-                "Authorization,Content-Type,Accept,Cookie,Origin,X-Requested-With,X-Api-Key,X-Session-Token,X-Correlation-Id".to_string()
+                "Authorization,Content-Type,Accept,Cookie,Origin,X-Requested-With,X-Api-Key,X-Session-Token,X-Correlation-Id,X-Company-Id,X-Branch-Id".to_string()
             })
             .split(',')
             .map(|s| s.trim().to_lowercase())

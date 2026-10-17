@@ -10,7 +10,9 @@ pub struct Model {
     pub id: Uuid,
     pub code: String,
     pub registration_number: String,
+    pub contact_group_id: Option<Uuid>,
     pub active: bool,
+    pub image_key: Option<String>,
     pub change_by: Option<Uuid>,
     pub row_version: i64,
 }

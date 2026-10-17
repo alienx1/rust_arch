@@ -5,7 +5,8 @@
 
 use leptos::prelude::*;
 use web_package::core::i18n::t_or;
-use web_package::ui::component::{
+use web_package::ui::component::{SaveConfirmButton, 
+    ContactsEditor, ImageField,
     Button, ButtonSize, ButtonVariant, DeleteConfirmButton, Card, CardContent, Checkbox, Input, Select, SelectOption,
     Spinner,
 };
@@ -124,6 +125,16 @@ pub fn CompanyForm() -> impl IntoView {
                     </div>
                 })}
 
+                <ImageField
+                    image_url=Signal::derive(move || ctx.editing.with(|e| e.as_ref().and_then(|x| x.image_url.clone())))
+                    saved=Signal::derive(move || ctx.editing.with(|e| e.is_some()))
+                    busy=ctx.is_image_busy
+                    can_write=can_write
+                    fallback=Signal::derive(move || ctx.editing.with(|e| e.as_ref().map(|x| x.code.clone()).unwrap_or_default()))
+                    on_upload=ctx.upload_image
+                    on_remove=ctx.remove_image
+                />
+
                 <fieldset class="contents" disabled=move || !can_write.get()>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div class="space-y-1.5">
@@ -216,6 +227,12 @@ pub fn CompanyForm() -> impl IntoView {
                     />
                 </div>
 
+                <ContactsEditor
+                    rows=ctx.contacts
+                    kinds=vec!["PHONE", "FAX", "EMAIL", "LINE", "TAX_ID"]
+                    disabled=Signal::derive(move || !can_write.get())
+                />
+
                 </fieldset>
 
                 <div class="flex items-center gap-2 pt-2">
@@ -236,13 +253,11 @@ pub fn CompanyForm() -> impl IntoView {
                         {t_or("common.action.cancel", "ยกเลิก")}
                     </Button>
                     <PermissionGate program="DBPG001" action=Action::Write>
-                    <Button
-                        variant=ButtonVariant::Default
-                        size=ButtonSize::Sm
-                        on_click=Callback::new(on_submit)
-                    >
-                        {move || if ctx.is_saving.get() { t_or("dbpg001.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") }}
-                    </Button>
+                    <SaveConfirmButton
+                        label=Signal::derive(move || if ctx.is_saving.get() { t_or("dbpg001.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") })
+                        on_confirm=Callback::new(on_submit)
+                        busy=Signal::derive(move || ctx.is_saving.get())
+                    />
                     </PermissionGate>
                 </div>
             </CardContent>

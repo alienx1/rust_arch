@@ -132,6 +132,24 @@ data:
         settings:
           ui_url: http://localhost:3000/settings
           privileged_session_max_age: 15m
+          after:
+            password:
+              hooks:
+                # A new password was set (recovery link or settings): clears su_user.must_change_password
+                - hook: web_hook
+                  config:
+                    url: http://host.k3d.internal:8000/api/v1/hooks/password-changed
+                    method: POST
+                    body: base64://ZnVuY3Rpb24oY3R4KSB7CiAgaWRlbnRpZmllcjogY3R4LmlkZW50aXR5LnRyYWl0cy5lbWFpbCwKICB1c2VybmFtZTogY3R4LmlkZW50aXR5LnRyYWl0cy51c2VybmFtZSwKfQo=
+                    can_interrupt: false
+                    response:
+                      ignore: true
+                    auth:
+                      type: api_key
+                      config:
+                        name: X-Webhook-Secret
+                        value: login-guard-dev-secret-7c41e9b2
+                        in: header
         recovery:
           enabled: true
           ui_url: http://localhost:3000/recovery
@@ -147,14 +165,16 @@ data:
           after:
             password:
               hooks:
-                # Refuse login when the user, its company or its organization is inactive.
+                # Refuse login when the user, its company or its organization is inactive, or the account must
+                # set a new password. The body is JSONNET (Kratos 1.x ignores Go templates: `{{ ... }}` would
+                # arrive as literal text and the guard could not tell whose login it is).
                 # api-master runs on the host (`make run-master`), reached via host.k3d.internal
                 # (mapped to the host by hostAliases in deployment.yaml).
                 - hook: web_hook
                   config:
                     url: http://host.k3d.internal:8000/api/v1/hooks/login-guard
                     method: POST
-                    body: base64://ewogICJpZGVudGlmaWVyIjogInt7IC5JZGVudGl0eS50cmFpdHMuZW1haWwgfX0iCn0=
+                    body: base64://ZnVuY3Rpb24oY3R4KSB7CiAgaWRlbnRpZmllcjogY3R4LmlkZW50aXR5LnRyYWl0cy5lbWFpbCwKICB1c2VybmFtZTogY3R4LmlkZW50aXR5LnRyYWl0cy51c2VybmFtZSwKfQo=
                     can_interrupt: true
                     response:
                       parse: true

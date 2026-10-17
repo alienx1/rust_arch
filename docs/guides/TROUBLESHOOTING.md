@@ -54,6 +54,7 @@ kubectl -n arch exec deploy/arch-cache -- valkey-cli --scan --pattern 'arch:*' |
 |---|---|---|
 | ข้อความหน้าจอเป็นภาษาไทยทั้งที่เลือกอังกฤษ | ขาด key ใน `db_label` (ใช้ข้อความไทยสำรองจาก `t_or`) | เพิ่มใน `sql/NN_i18n_*.sql` แล้ว `make seed` |
 | กด export แล้วไม่มีอะไรเกิดขึ้น | `api-report` (8001) ไม่ได้รัน หรือ topic `report.requests` ไม่มี | `make report`, `make topics` |
+| ไม่ได้รับอีเมลตั้งรหัสผ่าน | `api-notification` ไม่ได้รัน หรือไม่มี topic `mail-outbox` หรือ `mail.smtp_url` ไม่ถูกต้อง (ดู log ของ api-notification) | `make notification`, `make topics`, ตรวจ `su_configuration` |
 | กระดิ่งไม่เด้ง | `api-notification` (8002) ไม่ได้รัน / ไม่มี topic `notifications` | `make notification`, `make topics` |
 | งานรายงาน `running` ค้าง | worker ตายกลางทาง | ดู ALPG001 (Process Monitor): งานค้างเกิน 15 นาทีกด "ประมวลผลใหม่" ได้ |
 | Ctrl+C แล้ว api-report ไม่ยอมหยุด | SSE ที่เปิดค้าง | แก้แล้ว (ปิด stream + watchdog 10 วินาที); Ctrl+C ซ้ำออกทันที |

@@ -59,4 +59,23 @@ pub trait IdentityProvisioningPort: Send + Sync {
 
     /// Provider id of the identity behind a login identifier (email), `None` when unknown.
     async fn find_identity_id(&self, identifier: &str) -> Result<Option<String>, IdentityError>;
+
+    /// Changes the e-mail (`traits.email`, the sign-in address) of the identity behind `login` (its
+    /// user name or current e-mail). `Conflict` when another identity has the address, `NotFound`
+    /// when there is no such identity. The default does nothing (test doubles).
+    async fn update_email(&self, _login: &str, _new_email: &str) -> Result<(), IdentityError> {
+        Ok(())
+    }
+
+    /// User name (`traits.username`) of the identity behind a login identifier (e-mail or user
+    /// name), `None` when unknown. The default knows none (test doubles).
+    async fn find_username(&self, _identifier: &str) -> Result<Option<String>, IdentityError> {
+        Ok(None)
+    }
+
+    /// E-mail address of the identity behind a login identifier, `None` when unknown. The default
+    /// knows none (test doubles).
+    async fn find_email(&self, _identifier: &str) -> Result<Option<String>, IdentityError> {
+        Ok(None)
+    }
 }

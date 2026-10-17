@@ -75,6 +75,26 @@ pub fn NotificationBell() -> impl IntoView {
                         <span class="text-sm font-semibold">{t_or("ntpg000.bell.title", "การแจ้งเตือน")}</span>
                         <button
                             type="button"
+                            class="ml-auto mr-3 p-1 rounded-md text-muted-foreground hover:bg-muted cursor-pointer"
+                            aria-pressed=move || notifications.sound_on.get().to_string()
+                            title=move || if notifications.sound_on.get() {
+                                t_or("ntpg000.sound.on", "เปิดเสียงแจ้งเตือนอยู่ (กดเพื่อปิด)")
+                            } else {
+                                t_or("ntpg000.sound.off", "ปิดเสียงแจ้งเตือนอยู่ (กดเพื่อเปิด)")
+                            }
+                            on:click=move |_| notifications.toggle_sound.run(())
+                        >
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                                {move || if notifications.sound_on.get() {
+                                    view! { <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" /> }.into_any()
+                                } else {
+                                    view! { <path d="m23 9-6 6m0-6 6 6" /> }.into_any()
+                                }}
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
                             class="text-xs text-primary hover:underline cursor-pointer"
                             on:click=move |_| notifications.mark_all_read.run(())
                         >
@@ -111,7 +131,7 @@ pub fn NotificationBell() -> impl IntoView {
 fn BellItem(n: NotificationDto, on_open: Callback<NotificationDto>) -> impl IntoView {
     let unread = !n.read;
     let (dot, time) = (dot_class(&n.kind), local_time(&n.created_at));
-    let (title, body) = (n.title.clone(), n.body.clone());
+    let (title_n, body_n) = (n.clone(), n.clone());
     view! {
         <button
             type="button"
@@ -131,10 +151,10 @@ fn BellItem(n: NotificationDto, on_open: Callback<NotificationDto>) -> impl Into
             <span class=format!("mt-1.5 h-2 w-2 shrink-0 rounded-full {dot}")></span>
             <span class="min-w-0 flex-1">
                 <span class="flex items-center justify-between gap-2">
-                    <span class=format!("text-xs {}", if unread { "font-bold text-foreground" } else { "font-medium text-muted-foreground" })>{title}</span>
+                    <span class=format!("text-xs {}", if unread { "font-bold text-foreground" } else { "font-medium text-muted-foreground" })>{move || title_n.title_text()}</span>
                     <span class="text-[10px] text-muted-foreground whitespace-nowrap">{time}</span>
                 </span>
-                <span class=format!("block text-[11px] break-all {}", if unread { "text-foreground/80" } else { "text-muted-foreground" })>{body}</span>
+                <span class=format!("block text-[11px] break-all {}", if unread { "text-foreground/80" } else { "text-muted-foreground" })>{move || body_n.body_text()}</span>
             </span>
         </button>
     }

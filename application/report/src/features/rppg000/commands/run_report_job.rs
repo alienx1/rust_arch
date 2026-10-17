@@ -82,7 +82,7 @@ impl Rppg000CommandExecutor {
                     notification_kind::REPORT_READY,
                     "รายงานพร้อมให้ดาวน์โหลด",
                     format!("{} ({} แถว)", built.file_name, built.rows),
-                    id,
+                    serde_json::json!({ "job_id": id.to_string(), "file_name": built.file_name, "rows": built.rows }),
                 )
                 .await;
             }
@@ -95,15 +95,15 @@ impl Rppg000CommandExecutor {
                     &message.requested_by,
                     notification_kind::REPORT_FAILED,
                     "สร้างรายงานไม่สำเร็จ",
-                    reason,
-                    id,
+                    reason.clone(),
+                    serde_json::json!({ "job_id": id.to_string(), "reason": reason }),
                 )
                 .await;
             }
         }
     }
 
-    async fn notify(&self, username: &str, kind: &str, title: &str, body: String, job_id: Uuid) {
+    async fn notify(&self, username: &str, kind: &str, title: &str, body: String, data: serde_json::Value) {
         self.notifier
             .notify(
                 username,
@@ -112,7 +112,7 @@ impl Rppg000CommandExecutor {
                     kind: kind.to_string(),
                     title: title.to_string(),
                     body,
-                    data: serde_json::json!({ "job_id": job_id.to_string() }),
+                    data,
                     link: Some("/rp/rppg000".to_string()),
                     created_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
                 },

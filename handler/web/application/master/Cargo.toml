@@ -31,7 +31,7 @@ js-sys = { workspace = true }
 
 [dependencies.web-sys]
 workspace = true
-features = ["Window", "Document", "Element", "DomTokenList", "Storage", "HtmlInputElement", "Navigator", "Clipboard", "EventTarget", "Event", "MouseEvent", "HtmlElement", "Node", "Location", "Blob", "BlobPropertyBag", "EventSource", "MessageEvent"]
+features = ["Window", "Document", "Element", "DomTokenList", "Storage", "HtmlInputElement", "Navigator", "Clipboard", "EventTarget", "Event", "MouseEvent", "HtmlElement", "Node", "Location", "Blob", "BlobPropertyBag", "EventSource", "MessageEvent", "File", "FileList", "HtmlSelectElement", "AudioContext", "AudioContextState", "AudioDestinationNode", "AudioNode", "AudioParam", "BaseAudioContext", "GainNode", "OscillatorNode", "OscillatorType"]
 
 [build-dependencies]
 dotenvy = { workspace = true }

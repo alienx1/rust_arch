@@ -34,5 +34,8 @@ pub struct EmployeeDto {
     pub active: bool,
     /// Whether a `su_user` login account is linked to this employee
     pub has_user_account: bool,
+    /// Photo URL for `<img src>` (`None` = no image)
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }

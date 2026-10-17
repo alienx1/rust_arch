@@ -218,7 +218,9 @@ CREATE TABLE "db_organization" (
   "id" uuid PRIMARY KEY NOT NULL,
   "code" varchar(100) NOT NULL,
   "registration_number" varchar(100) NOT NULL,
+  "contact_group_id" uuid,
   "active" boolean NOT NULL DEFAULT false,
+  "image_key" varchar(500),
   "change_by" uuid,
   "row_version" bigint NOT NULL DEFAULT 1
 );
@@ -237,7 +239,9 @@ CREATE TABLE "db_company" (
   "organization_id" uuid NOT NULL,
   "code" varchar(100) NOT NULL,
   "master_lookup_id" uuid NOT NULL,
+  "contact_group_id" uuid,
   "active" boolean NOT NULL DEFAULT false,
+  "image_key" varchar(500),
   "change_by" uuid,
   "row_version" bigint NOT NULL DEFAULT 1
 );
@@ -396,6 +400,7 @@ CREATE TABLE "db_employee" (
   "contact_group_id" uuid,
   "code" varchar(100) NOT NULL,
   "active" boolean NOT NULL DEFAULT false,
+  "image_key" varchar(500),
   "change_by" uuid,
   "row_version" bigint NOT NULL DEFAULT 1
 );
@@ -409,6 +414,7 @@ CREATE TABLE "su_user" (
   "password_type" varchar(50) NOT NULL DEFAULT 'argon2id',
   "created_time" timestamptz NOT NULL DEFAULT now(),
   "active" boolean NOT NULL DEFAULT false,
+  "must_change_password" boolean NOT NULL DEFAULT false,
   "change_by" uuid,
   "row_version" bigint NOT NULL DEFAULT 1
 );
@@ -708,9 +714,11 @@ COMMENT ON COLUMN "db_organization"."id" IS 'Primary key of organization';
 
 COMMENT ON COLUMN "db_organization"."code" IS 'Organization code';
 
-COMMENT ON COLUMN "db_organization"."registration_number" IS 'Official registration number';
+COMMENT ON COLUMN "db_organization"."registration_number" IS 'Registration number of the organization with this system (not the tax id: that is a contact of type TAX_ID)';
+COMMENT ON COLUMN "db_organization"."contact_group_id" IS 'Organization contacts (phone, fax, email, tax id ...)';
 
 COMMENT ON COLUMN "db_organization"."active" IS 'Whether organization is active';
+COMMENT ON COLUMN "db_organization"."image_key" IS 'Object-storage key of the logo (NULL = none)';
 
 COMMENT ON COLUMN "db_organization_label"."organization_id" IS 'Referenced organization';
 
@@ -727,6 +735,8 @@ COMMENT ON COLUMN "db_company"."code" IS 'Company code';
 COMMENT ON COLUMN "db_company"."master_lookup_id" IS 'Company type';
 
 COMMENT ON COLUMN "db_company"."active" IS 'Whether company is active';
+COMMENT ON COLUMN "db_company"."contact_group_id" IS 'Company contacts (phone, fax, email, tax id ...)';
+COMMENT ON COLUMN "db_company"."image_key" IS 'Object-storage key of the logo (NULL = none)';
 
 COMMENT ON COLUMN "db_company_label"."company_id" IS 'Referenced company';
 
@@ -820,6 +830,7 @@ COMMENT ON COLUMN "db_program_label"."language_id" IS 'Language of label';
 
 COMMENT ON COLUMN "db_program_label"."label" IS 'Localized program name';
 
+COMMENT ON COLUMN "su_user"."must_change_password" IS 'The account may not sign in until its password is (re)set through the emailed link';
 COMMENT ON COLUMN "su_configuration"."id" IS 'Primary key of system configuration';
 
 COMMENT ON COLUMN "su_configuration"."category" IS 'Configuration category';
@@ -979,6 +990,10 @@ ALTER TABLE "db_branch" ADD FOREIGN KEY ("company_id") REFERENCES "db_company" (
 ALTER TABLE "db_branch" ADD FOREIGN KEY ("master_lookup_id") REFERENCES "db_master_lookup" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "db_branch" ADD FOREIGN KEY ("address_group_id") REFERENCES "db_address_group" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "db_organization" ADD FOREIGN KEY ("contact_group_id") REFERENCES "db_contact_group" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "db_company" ADD FOREIGN KEY ("contact_group_id") REFERENCES "db_contact_group" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "db_branch" ADD FOREIGN KEY ("contact_group_id") REFERENCES "db_contact_group" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 

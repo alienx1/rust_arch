@@ -2,4 +2,4 @@
 
 pub mod dbpg002_service;
 
-pub use dbpg002_service::Dbpg002Service;
+pub use dbpg002_service::{DBPG002_API, Dbpg002Service};

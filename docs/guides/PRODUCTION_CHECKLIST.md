@@ -78,3 +78,9 @@ repo นี้ตั้งค่าไว้สำหรับ **พัฒนา
 - ☐ รูปแบบโค้ด: เพิ่ม `rustfmt.toml` / `clippy.toml` แล้วบังคับใน CI
 - ☐ แผนรับมือเหตุ: ใครเป็น on-call, วิธีกู้คืน, runbook (เริ่มจาก [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md))
 - ☐ ทดสอบโหลด/ความจุ: audit, export ระดับล้านแถว (ตอนนี้วัดเฉพาะขั้นดึงจาก Quickwit)
+
+## Mail and sign-in protection
+- Set `mail.smtp_url` / `mail.from` in `su_configuration` (the URL may carry credentials, so restrict who can read that table; without them users get no set-password mail).
+- Route Kratos `/self-service/*` from the browser through api-master `/api/v1/auth/kratos/*` (the brute-force lock lives there), and keep Kratos' own public port unreachable from the internet for login submits.
+- Apply the Kratos config with the `settings.after.password` web hook (`/hooks/password-changed`) and a strong `KRATOS_WEBHOOK_SECRET`.
+- Mail is sent by **api-notification** (reads topic `mail-outbox`): it must be running, and the topic must exist with a short retention (`make topics`, 1 hour) — the messages hold one-time password links; do not index it.

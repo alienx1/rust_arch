@@ -1,6 +1,7 @@
 //! Core infrastructure utilities for Leptos WebAssembly: HTTP requestor, Ory Kratos auth, and errors.
 
 pub mod auth;
+pub mod company_scope;
 pub mod errors;
 pub mod i18n;
 pub mod requestor;

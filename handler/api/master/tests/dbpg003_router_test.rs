@@ -5,9 +5,9 @@ use api_master::routers::{DBPG003_PATH, Dbpg003State, dbpg003_routes_with_state}
 use application_master::features::db::dbpg003::{
     BranchOptionDto, CompanyOptionDto, CreateEmployeeCommand, Dbpg003Commands, Dbpg003Error,
     Dbpg003SummaryDto, DepartmentOptionDto, EmployeeDto, EmployeeFilterQuery, EmployeePageDto,
-    PrefixOptionDto, UpdateEmployeeCommand,
+    PrefixOptionDto, StoredImage, UpdateEmployeeCommand,
 };
-use application_master::features::su::access_control::{AccessControl, AccessError, Actor, PermissionAction};
+use application_master::features::su::access_control::{AccessControl, AccessError, Actor, OwnEmployee, PermissionAction};
 use async_trait::async_trait;
 use axum::{Extension, Router};
 use axum::body::{Body, to_bytes};
@@ -51,6 +51,7 @@ impl MockDbpg003Commands {
             nickname_en: String::new(),
             active: true,
             has_user_account: true,
+            image_url: None,
             row_version,
         }
     }
@@ -120,6 +121,24 @@ impl Dbpg003Commands for MockDbpg003Commands {
         Ok(self.employee(&cmd.code.trim().to_uppercase(), 2))
     }
 
+    async fn get_employee_image(&self, id: Uuid) -> Result<StoredImage, Dbpg003Error> {
+        if id == self.employee_id {
+            Ok(StoredImage { bytes: PNG.to_vec(), content_type: "image/png" })
+        } else {
+            Err(Dbpg003Error::NotFound(format!("{id} has no image")))
+        }
+    }
+
+    async fn set_employee_image(&self, id: Uuid, bytes: Vec<u8>) -> Result<EmployeeDto, Dbpg003Error> {
+        if bytes.len() > 10 {
+            return Err(Dbpg003Error::Validation("Image must be PNG, JPEG, GIF or WebP".to_string()));
+        }
+        let mut employee = self.employee("E001", 1);
+        employee.id = id;
+        employee.image_url = Some(format!("/api/v1/db/dbpg003/employees/{id}/image?v=abc"));
+        Ok(employee)
+    }
+
     async fn delete_employee(&self, id: Uuid) -> Result<(), Dbpg003Error> {
         // The fixture employee has a user account, so it is still referenced
         if id == self.employee_id {
@@ -128,6 +147,9 @@ impl Dbpg003Commands for MockDbpg003Commands {
         Ok(())
     }
 }
+
+/// First bytes of a PNG: all the mock needs to hand back
+const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 fn mock() -> MockDbpg003Commands {
     MockDbpg003Commands { employee_id: Uuid::now_v7(), department_id: Uuid::now_v7() }
@@ -153,7 +175,15 @@ impl AccessControl for MockAccess {
         };
         Ok(allowed.then(|| Actor { user_id: Uuid::nil(), username: username.to_string() }))
     }
+
+    /// `owner` is the employee whose id the fixture uses: see `OWNER_EMPLOYEE`
+    async fn own_employee(&self, username: &str) -> Result<Option<OwnEmployee>, AccessError> {
+        Ok((username == "owner").then(|| OwnEmployee { id: OWNER_EMPLOYEE, image_url: None, organization: None, company: None, is_hq: false, unlimited: false, choices: vec![], branches: vec![] }))
+    }
 }
+
+/// Employee id of the account `owner` (no rights at all, yet it may see its own photo)
+const OWNER_EMPLOYEE: Uuid = Uuid::from_u128(0xE);
 
 fn user(username: &str) -> AuthenticatedUser {
     AuthenticatedUser {
@@ -373,4 +403,57 @@ async fn test_admin_can_delete() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn test_employee_photo_is_served_with_a_safe_content_type() {
+    let m = mock();
+    let id = m.employee_id;
+    let resp = router_as(m, "reader").oneshot(get(&format!("/db/dbpg003/employees/{id}/image"))).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.headers()["content-type"], "image/png");
+    assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
+    assert_eq!(&to_bytes(resp.into_body(), usize::MAX).await.unwrap()[..], &PNG[..]);
+
+    let none = router_as(mock(), "reader").oneshot(get(&format!("/db/dbpg003/employees/{}/image", Uuid::now_v7()))).await.unwrap();
+    assert_eq!(none.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_uploading_an_employee_photo_needs_write_permission_and_a_real_image() {
+    let put = |id: Uuid, bytes: &'static [u8]| {
+        Request::builder()
+            .uri(format!("/db/dbpg003/employees/{id}/image"))
+            .method("PUT")
+            .header("content-type", "image/png")
+            .body(Body::from(bytes))
+            .unwrap()
+    };
+    let m = mock();
+    let id = m.employee_id;
+    assert_eq!(router_as(m, "reader").oneshot(put(id, &PNG)).await.unwrap().status(), StatusCode::FORBIDDEN);
+
+    let m = mock();
+    let id = m.employee_id;
+    let ok = router_as(m, "writer").oneshot(put(id, &PNG)).await.unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    let body: serde_json::Value = body_json(ok).await;
+    assert!(body["image_url"].as_str().unwrap().contains("/image?v="));
+
+    let m = mock();
+    let id = m.employee_id;
+    let bad = router_as(m, "writer").oneshot(put(id, b"<svg onload=alert(1)></svg>")).await.unwrap();
+    assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_an_account_may_see_its_own_photo_without_any_right_but_not_somebody_elses() {
+    let mut m = mock();
+    m.employee_id = OWNER_EMPLOYEE;
+    let own = router_as(m, "owner").oneshot(get(&format!("/db/dbpg003/employees/{OWNER_EMPLOYEE}/image"))).await.unwrap();
+    assert_eq!(own.status(), StatusCode::OK);
+
+    let other = Uuid::now_v7();
+    let denied = router_as(mock(), "owner").oneshot(get(&format!("/db/dbpg003/employees/{other}/image"))).await.unwrap();
+    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 }

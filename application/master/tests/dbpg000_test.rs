@@ -134,6 +134,7 @@ async fn test_list_organizations() {
             name_en: "ARCH Organization".to_string(),
             company_count: 1,
             row_version: 1,
+            image_url: None,
         }],
         companies: vec![],
     };
@@ -161,6 +162,7 @@ async fn test_filter_companies_by_organization() {
         name_th: "บริษัท 1".to_string(),
         name_en: "Company 1".to_string(),
         row_version: 1,
+        image_url: None,
     };
     let comp2 = CompanyDto {
         id: Uuid::now_v7(),
@@ -174,6 +176,7 @@ async fn test_filter_companies_by_organization() {
         name_th: "บริษัท 2".to_string(),
         name_en: "Company 2".to_string(),
         row_version: 1,
+        image_url: None,
     };
 
     let mock = MockDbpg000Queries {

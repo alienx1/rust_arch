@@ -5,7 +5,7 @@
 use web_package::core::i18n::t_or;
 use crate::api_client::{ApiClient, query_string};
 use crate::pages::su::supg004::models::{
-    CreateUserInput, CreateUserResultDto, EmployeeOptionDto, GroupOptionDto, RecoveryLinkDto,
+    CreateUserInput, CreateUserResultDto, EmployeeOptionDto, GroupOptionDto, PasswordMailResultDto,
     ScopeOptionsDto, UpdateUserInput, UserAccountDto, UserPageDto,
 };
 
@@ -83,7 +83,13 @@ impl Supg004Service {
         self.api.delete(&format!("/users/{id}"), &t_or("supg004.what.user", "บัญชีผู้ใช้")).await
     }
 
-    pub async fn create_recovery_link(&self, id: &str) -> Result<RecoveryLinkDto, String> {
-        self.api.post_cbor(&format!("/users/{id}/recovery-link"), &(), &t_or("supg004.action.recovery_link", "ลิงก์ตั้งรหัสผ่าน")).await
+    /// Mails the user a link to set a new password (the old one keeps working until then)
+    pub async fn send_password_mail(&self, id: &str) -> Result<PasswordMailResultDto, String> {
+        self.api.post_cbor(&format!("/users/{id}/password-mail"), &(), &t_or("supg004.action.password_mail", "อีเมลตั้งรหัสผ่าน")).await
+    }
+
+    /// Signs the user out everywhere and blocks sign-in until a new password is set; mails the link
+    pub async fn force_password_change(&self, id: &str) -> Result<PasswordMailResultDto, String> {
+        self.api.post_cbor(&format!("/users/{id}/force-password-change"), &(), &t_or("supg004.action.force_change", "บังคับเปลี่ยนรหัสผ่าน")).await
     }
 }

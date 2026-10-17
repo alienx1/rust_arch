@@ -67,7 +67,9 @@ pub fn DemoScreen() -> impl IntoView {
                 <div class="space-y-6 pb-12">
                     // Category Filter Bar
                     <div class="flex flex-wrap gap-2 pb-2 border-b border-border">
-                        {[
+                        {move || {
+                            let current = active_tab.get();
+                            [
                             ("overview", "ทั้งหมด (Overview)"),
                             ("buttons", "1. Buttons"),
                             ("forms", "2. Forms"),
@@ -77,20 +79,20 @@ pub fn DemoScreen() -> impl IntoView {
                             ("navigation", "6. Navigation"),
                             ("layers", "7. Layers"),
                         ].into_iter().map(|(val, lbl)| {
-                            let val_str = val.to_string();
                             let val_for_click = val.to_string();
-                            let is_active = move || active_tab.get() == val_str;
+                            let is_active = current == val;
                             view! {
                                 <Button
                                     size=ButtonSize::Sm
-                                    variant=if is_active() { ButtonVariant::Default } else { ButtonVariant::Outline }
+                                    variant=if is_active { ButtonVariant::Default } else { ButtonVariant::Outline }
                                     class="text-xs"
                                     on_click=Callback::new(move |_| set_active_tab.set(val_for_click.clone()))
                                 >
                                     {lbl}
                                 </Button>
                             }
-                        }).collect::<Vec<_>>()}
+                        }).collect::<Vec<_>>()
+                        }}
                     </div>
 
                     // Filtered Showcase Sections

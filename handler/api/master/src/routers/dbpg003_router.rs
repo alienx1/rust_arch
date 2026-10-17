@@ -9,8 +9,9 @@ use application_master::features::db::dbpg003::{
 };
 use axum::{
     Extension, Json, Router,
-    extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    body::Bytes,
+    extract::{DefaultBodyLimit, FromRef, Path, Query, State},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::get,
 };
@@ -207,6 +208,65 @@ async fn current_department(commands: &Arc<dyn Dbpg003Commands>, employee_id: Uu
     }
 }
 
+/// Employee photo bytes
+pub async fn get_employee_image_handler(
+    State(commands): State<Arc<dyn Dbpg003Commands>>,
+    State(access): State<Arc<dyn AccessControl>>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(id): Path<Uuid>,
+) -> Result<Response, Dbpg003ApiError> {
+    // Everybody may see their own photo (the topbar avatar); other photos need Read on DBPG003
+    if let Err(denied) = require(&access, &user, PROGRAM, PermissionAction::Read).await {
+        let own = match super::username_of(&user) {
+            Some(name) => access.own_employee(&name).await.ok().flatten().is_some_and(|e| e.id == id),
+            None => false,
+        };
+        if !own {
+            return Ok(denied);
+        }
+    }
+    let image = commands.get_employee_image(id).await?;
+    let mut res = (StatusCode::OK, image.bytes).into_response();
+    let h = res.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(image.content_type));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=86400"));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    Ok(res)
+}
+
+/// Replace the photo: the request body is the raw image file (same department-scope rule as an update)
+pub async fn put_employee_image_handler(
+    State(commands): State<Arc<dyn Dbpg003Commands>>,
+    State(access): State<Arc<dyn AccessControl>>,
+    Extension(user): Extension<AuthenticatedUser>,
+    wire: WireFormat,
+    Path(id): Path<Uuid>,
+    body: Bytes,
+) -> Result<Response, Dbpg003ApiError> {
+    if let Err(denied) = require_unit(&access, &user, PROGRAM, PermissionAction::Write, ScopeLevel::Department, current_department(&commands, id).await).await {
+        return Ok(denied);
+    }
+    Ok(wire.respond(commands.set_employee_image(id, body.to_vec()).await?))
+}
+
+/// Remove the photo
+pub async fn delete_employee_image_handler(
+    State(commands): State<Arc<dyn Dbpg003Commands>>,
+    State(access): State<Arc<dyn AccessControl>>,
+    Extension(user): Extension<AuthenticatedUser>,
+    wire: WireFormat,
+    Path(id): Path<Uuid>,
+) -> Result<Response, Dbpg003ApiError> {
+    if let Err(denied) = require_unit(&access, &user, PROGRAM, PermissionAction::Write, ScopeLevel::Department, current_department(&commands, id).await).await {
+        return Ok(denied);
+    }
+    Ok(wire.respond(commands.remove_employee_image(id).await?))
+}
+
+/// Largest request body of a photo upload: a little above the 2 MB limit so the command answers
+/// "too large" with a clear message instead of the generic body-limit error
+const IMAGE_BODY_LIMIT: usize = 3 * 1024 * 1024;
+
 /// Create employee
 pub async fn create_employee_handler(
     State(commands): State<Arc<dyn Dbpg003Commands>>,
@@ -259,6 +319,7 @@ pub async fn delete_employee_handler(
 /// Sub-router for DBPG003 endpoints mounted into `AppConnection`.
 pub fn dbpg003_routes() -> Router<AppConnection> {
     Router::new()
+        .merge(super::contacts_router::dbpg003_contact_routes())
         .route("/companies", get(list_company_options_handler))
         .route("/branches", get(list_branch_options_handler))
         .route("/departments", get(list_department_options_handler))
@@ -266,6 +327,11 @@ pub fn dbpg003_routes() -> Router<AppConnection> {
         .route("/summary", get(get_summary_handler))
         .route("/employees", get(list_employees_handler).post(create_employee_handler))
         .route("/employees/{id}", get(get_employee_handler).put(update_employee_handler).delete(delete_employee_handler))
+        .route(
+            "/employees/{id}/image",
+            get(get_employee_image_handler).put(put_employee_image_handler).delete(delete_employee_image_handler),
+        )
+        .layer(DefaultBodyLimit::max(IMAGE_BODY_LIMIT))
 }
 
 /// Same routes with explicit state (useful for tests).
@@ -278,5 +344,10 @@ pub fn dbpg003_routes_with_state(state: Dbpg003State) -> Router {
         .route("/summary", get(get_summary_handler))
         .route("/employees", get(list_employees_handler).post(create_employee_handler))
         .route("/employees/{id}", get(get_employee_handler).put(update_employee_handler).delete(delete_employee_handler))
+        .route(
+            "/employees/{id}/image",
+            get(get_employee_image_handler).put(put_employee_image_handler).delete(delete_employee_image_handler),
+        )
+        .layer(DefaultBodyLimit::max(IMAGE_BODY_LIMIT))
         .with_state(state)
 }

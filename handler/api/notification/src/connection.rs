@@ -2,8 +2,10 @@
 //! the consumer that stores and pushes notifications.
 
 use application_core::traits::{
-    EventConsumer, EventHandler, NOTIFICATION_SERVICE_GROUP, NOTIFICATIONS_TOPIC, NotificationPush,
+    EventConsumer, EventHandler, MAIL_SERVICE_GROUP, MAIL_TOPIC, MailService, NOTIFICATION_SERVICE_GROUP,
+    NOTIFICATIONS_TOPIC, NotificationPush,
 };
+use application_notification::features::mail_delivery::MailDeliveryHandler;
 use application_notification::features::ntpg000::{
     DbNtpg000Queries, NotificationMessageHandler, Ntpg000CommandExecutor, Ntpg000Commands,
 };
@@ -67,6 +69,9 @@ impl NotificationConnection {
             Arc::new(Ntpg000CommandExecutor::new(Arc::new(DbNtpg000Queries::new(db.clone())), push));
 
         spawn_consumer(commands.clone());
+        // Mail queued by the other services is sent here, with the SMTP settings of su_configuration
+        let mail: Arc<dyn MailService> = Arc::new(infrastructure::ConfiguredMailService::new(db.clone()));
+        spawn_mail_consumer(Arc::new(MailDeliveryHandler::new(mail).with_failure_notices(commands.clone())));
         Ok(Self { db, kratos: Some(kratos), ntpg000_commands: commands, sessions })
     }
 
@@ -90,4 +95,21 @@ fn spawn_consumer(commands: Arc<dyn Ntpg000Commands>) {
         }
     });
     info!(topic = NOTIFICATIONS_TOPIC, "notification consumer started");
+}
+
+/// Reads `mail-outbox` for as long as the process lives and sends what it finds
+fn spawn_mail_consumer(handler: Arc<MailDeliveryHandler>) {
+    let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+    let group = env::var("MAIL_CONSUMER_GROUP").unwrap_or_else(|_| MAIL_SERVICE_GROUP.to_string());
+    tokio::spawn(async move {
+        let consumer = RedpandaEventConsumer::new(&brokers);
+        let handler: Arc<dyn EventHandler> = handler;
+        loop {
+            if let Err(e) = consumer.consume(MAIL_TOPIC, &group, handler.clone()).await {
+                error!(error = %e, "mail consumer stopped, retrying in 5 s");
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
+    info!(topic = MAIL_TOPIC, "mail delivery started");
 }

@@ -39,18 +39,23 @@ pub fn provide_menu_context() -> MenuContext {
         let service = service.clone();
         spawn_local(async move {
             let show_dev_demo = is_dev_env();
-            match service.fetch_menu_tree().await {
+            let result = service.fetch_menu_tree().await;
+            // The layout can be gone by the time the answer arrives (sign-out, navigation to
+            // /login, a hot reload): its signals are disposed, so write with `try_*` and drop the
+            // answer instead of panicking
+            match result {
                 Ok(tree) => {
                     let built = (tree, lang.clone());
-                    if last_built.get_value().as_ref() != Some(&built) {
-                        set_sections.set(menu_to_sections(&built.0, &lang, show_dev_demo));
-                        set_user_menu.set(user_menu_items(&built.0, &lang));
-                        last_built.set_value(Some(built));
+                    let Some(previous) = last_built.try_get_value() else { return };
+                    if previous.as_ref() != Some(&built) {
+                        let _ = set_sections.try_set(menu_to_sections(&built.0, &lang, show_dev_demo));
+                        let _ = set_user_menu.try_set(user_menu_items(&built.0, &lang));
+                        last_built.try_set_value(Some(built));
                     }
                 }
                 Err(e) => {
                     leptos::logging::warn!("menu: {e}; showing the fallback menu");
-                    set_sections.set(fallback_sections(&lang, show_dev_demo));
+                    let _ = set_sections.try_set(fallback_sections(&lang, show_dev_demo));
                 }
             }
         });

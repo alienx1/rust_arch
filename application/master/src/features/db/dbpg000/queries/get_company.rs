@@ -5,13 +5,14 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg000::errors::Dbpg000Error;
 use crate::features::db::dbpg000::models::{
-    CompanyDto, ENGLISH_LANGUAGE_ID, THAI_LANGUAGE_ID, db_company, db_company_label,
-    db_organization, db_organization_label,
+    CompanyDto, ENGLISH_LANGUAGE_ID, ImageOwner, THAI_LANGUAGE_ID, db_company, db_company_label,
+    db_organization, db_organization_label, image_url,
 };
 use crate::features::localization::request_language::pick;
 use domain::entity::db_master_lookup_label;
 
 use super::db_dbpg000_queries::DbDbpg000Queries;
+use crate::features::db::view_scope_filters::in_scope;
 
 impl DbDbpg000Queries {
     pub(super) async fn get_company_by_id(
@@ -19,8 +20,8 @@ impl DbDbpg000Queries {
         id: Uuid,
     ) -> Result<Option<CompanyDto>, Dbpg000Error> {
         let comp = match db_company::Entity::find_by_id(id).one(&self.db).await? {
-            Some(c) => c,
-            None => return Ok(None),
+            Some(c) if in_scope(Some(c.id), None, None) => c,
+            _ => return Ok(None),
         };
 
         let org = db_organization::Entity::find_by_id(comp.organization_id)
@@ -83,6 +84,7 @@ impl DbDbpg000Queries {
             active: comp.active,
             name_th,
             name_en,
+            image_url: image_url(ImageOwner::Company, comp.id, comp.image_key.as_deref()),
             row_version: comp.row_version,
         }))
     }

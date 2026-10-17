@@ -12,7 +12,10 @@ use crate::pages::db::dbpg001::models::{
     CompanyDto, CompanyTypeOptionDto, CreateCompanyInput, CreateOrgInput, OrganizationDto,
     UpdateCompanyInput, UpdateOrgInput,
 };
-use crate::pages::db::dbpg001::services::Dbpg001Service;
+use crate::contacts::{load_contacts, save_contacts};
+use crate::pages::db::dbpg001::services::{DBPG001_API, Dbpg001Service};
+use web_package::ui::component::ContactItem;
+use web_package::ui::component::read_image_file;
 use crate::routes::DBPG000;
 
 /// State of the organization form (`/db/dbpg001/org[/:id]`)
@@ -24,6 +27,13 @@ pub struct Dbpg001OrgContext {
     pub is_saving: ReadSignal<bool>,
     pub error: ReadSignal<Option<String>>,
     pub is_deleting: ReadSignal<bool>,
+    /// A logo upload / removal is running
+    /// Contacts of the organization, edited in the form and saved with it
+    pub contacts: RwSignal<Vec<ContactItem>>,
+    pub is_image_busy: ReadSignal<bool>,
+    /// Uploads the chosen file as the organization's logo (editing only)
+    pub upload_image: Callback<web_sys::File>,
+    pub remove_image: Callback<()>,
     pub save: Callback<CreateOrgInput>,
     pub delete: Callback<()>,
     pub cancel: Callback<()>,
@@ -41,6 +51,11 @@ pub struct Dbpg001CompanyContext {
     pub is_saving: ReadSignal<bool>,
     pub error: ReadSignal<Option<String>>,
     pub is_deleting: ReadSignal<bool>,
+    /// Contacts of the company, edited in the form and saved with it
+    pub contacts: RwSignal<Vec<ContactItem>>,
+    pub is_image_busy: ReadSignal<bool>,
+    pub upload_image: Callback<web_sys::File>,
+    pub remove_image: Callback<()>,
     pub save: Callback<CreateCompanyInput>,
     pub delete: Callback<()>,
     pub cancel: Callback<()>,
@@ -61,6 +76,11 @@ pub fn provide_dbpg001_org_context(id: Option<String>) -> Dbpg001OrgContext {
     let (error, set_error) = signal(Option::<String>::None);
     let cancel = back_to_list_callback();
     let delete_id = id.clone();
+    let image_id = id.clone();
+    let contacts = RwSignal::new(Vec::<ContactItem>::new());
+    if let Some(id) = id.clone() {
+        load_contacts(DBPG001_API, format!("/organizations/{id}"), contacts);
+    }
 
     if let Some(id) = id.clone() {
         let s = service.clone();
@@ -99,17 +119,25 @@ pub fn provide_dbpg001_org_context(id: Option<String>) -> Dbpg001OrgContext {
                 (Some(_), None) => Err(t_or("dbpg001.org.error.not_loaded", "ยังโหลดข้อมูลองค์กรไม่สำเร็จ ไม่สามารถบันทึกได้")),
                 (None, _) => s.create_organization(input).await,
             };
+            // The record is saved: now its contacts
+            let res = match res {
+                Ok(saved) => save_contacts(DBPG001_API, &format!("/organizations/{}", saved.id), &contacts.get_untracked())
+                    .await
+                    .map_err(|e| format!("{}: {e}", t_or("common.contact.saved_partly", "บันทึกข้อมูลแล้ว แต่บันทึกช่องทางติดต่อไม่สำเร็จ"))),
+                Err(e) => Err(e),
+            };
             set_is_saving.set(false);
             match res {
-                Ok(_) => cancel.run(()),
+                Ok(()) => cancel.run(()),
                 Err(e) => set_error.set(Some(e)),
             }
         });
     });
 
 
+    let delete_service = service.clone();
     let delete = Callback::new(move |()| {
-        let s = service.clone();
+        let s = delete_service.clone();
         let Some(id) = delete_id.clone() else { return };
         set_is_deleting.set(true);
         set_error.set(None);
@@ -123,7 +151,48 @@ pub fn provide_dbpg001_org_context(id: Option<String>) -> Dbpg001OrgContext {
         });
     });
 
+    let (is_image_busy, set_is_image_busy) = signal(false);
+    let upload_image = {
+        let (s, id) = (service.clone(), image_id.clone());
+        Callback::new(move |file: web_sys::File| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = match read_image_file(file).await {
+                    Ok((bytes, ct)) => s.set_organization_image(&id, bytes, ct).await,
+                    Err(e) => Err(e),
+                };
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(org) => set_editing.set(Some(org)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+    let remove_image = {
+        let (s, id) = (service.clone(), image_id.clone());
+        Callback::new(move |()| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = s.remove_organization_image(&id).await;
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(org) => set_editing.set(Some(org)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+
     let ctx = Dbpg001OrgContext {
+        contacts,
+        is_image_busy,
+        upload_image,
+        remove_image,
         editing,
         is_loading,
         is_saving,
@@ -153,6 +222,11 @@ pub fn provide_dbpg001_company_context(
     let (default_org_id, _) = signal(default_org_id);
     let cancel = back_to_list_callback();
     let delete_id = id.clone();
+    let image_id = id.clone();
+    let contacts = RwSignal::new(Vec::<ContactItem>::new());
+    if let Some(id) = id.clone() {
+        load_contacts(DBPG001_API, format!("/companies/{id}"), contacts);
+    }
 
     {
         let s = service.clone();
@@ -207,17 +281,25 @@ pub fn provide_dbpg001_company_context(
                 (Some(_), None) => Err(t_or("dbpg001.company.error.not_loaded", "ยังโหลดข้อมูลบริษัทไม่สำเร็จ ไม่สามารถบันทึกได้")),
                 (None, _) => s.create_company(input).await,
             };
+            // The record is saved: now its contacts
+            let res = match res {
+                Ok(saved) => save_contacts(DBPG001_API, &format!("/companies/{}", saved.id), &contacts.get_untracked())
+                    .await
+                    .map_err(|e| format!("{}: {e}", t_or("common.contact.saved_partly", "บันทึกข้อมูลแล้ว แต่บันทึกช่องทางติดต่อไม่สำเร็จ"))),
+                Err(e) => Err(e),
+            };
             set_is_saving.set(false);
             match res {
-                Ok(_) => cancel.run(()),
+                Ok(()) => cancel.run(()),
                 Err(e) => set_error.set(Some(e)),
             }
         });
     });
 
 
+    let delete_service = service.clone();
     let delete = Callback::new(move |()| {
-        let s = service.clone();
+        let s = delete_service.clone();
         let Some(id) = delete_id.clone() else { return };
         set_is_deleting.set(true);
         set_error.set(None);
@@ -231,7 +313,48 @@ pub fn provide_dbpg001_company_context(
         });
     });
 
+    let (is_image_busy, set_is_image_busy) = signal(false);
+    let upload_image = {
+        let (s, id) = (service.clone(), image_id.clone());
+        Callback::new(move |file: web_sys::File| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = match read_image_file(file).await {
+                    Ok((bytes, ct)) => s.set_company_image(&id, bytes, ct).await,
+                    Err(e) => Err(e),
+                };
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(company) => set_editing.set(Some(company)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+    let remove_image = {
+        let (s, id) = (service.clone(), image_id.clone());
+        Callback::new(move |()| {
+            let (s, Some(id)) = (s.clone(), id.clone()) else { return };
+            set_is_image_busy.set(true);
+            set_error.set(None);
+            spawn_local(async move {
+                let res = s.remove_company_image(&id).await;
+                set_is_image_busy.set(false);
+                match res {
+                    Ok(company) => set_editing.set(Some(company)),
+                    Err(e) => set_error.set(Some(e)),
+                }
+            });
+        })
+    };
+
     let ctx = Dbpg001CompanyContext {
+        contacts,
+        is_image_busy,
+        upload_image,
+        remove_image,
         editing,
         organizations,
         company_types,

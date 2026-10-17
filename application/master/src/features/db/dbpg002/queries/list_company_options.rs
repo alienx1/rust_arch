@@ -6,10 +6,11 @@ use super::label_lookup::fold_names;
 use crate::features::db::dbpg002::errors::Dbpg002Error;
 use crate::features::db::dbpg002::models::{CompanyOptionDto, db_company, db_company_label};
 use crate::features::db::dbpg002::queries::db_dbpg002_queries::DbDbpg002Queries;
+use crate::features::db::view_scope_filters::by_company;
 
 impl DbDbpg002Queries {
     pub(super) async fn list_company_options(&self) -> Result<Vec<CompanyOptionDto>, Dbpg002Error> {
-        let companies = db_company::Entity::find()
+        let companies = by_company(db_company::Entity::find(), db_company::Column::Id)
             .order_by_asc(db_company::Column::Code)
             .all(&self.db)
             .await?;

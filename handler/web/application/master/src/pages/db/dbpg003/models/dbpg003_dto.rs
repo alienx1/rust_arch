@@ -104,6 +104,9 @@ pub struct EmployeeDto {
     pub nickname_en: String,
     pub active: bool,
     pub has_user_account: bool,
+    /// Photo URL for `<img src>`
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }
 

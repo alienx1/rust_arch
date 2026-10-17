@@ -143,6 +143,11 @@ impl KratosConfig {
     /// Kratos identity id of the identity that has `identifier` (email / username) as a
     /// credential identifier; `None` when there is none. Never treats the input as an id.
     async fn lookup_identity_id(&self, identifier: &str) -> Result<Option<String>, String> {
+        Ok(self.lookup_identity(identifier).await?.and_then(|i| i["id"].as_str().map(ToString::to_string)))
+    }
+
+    /// The identity that has `identifier` as a credential identifier (the raw Kratos object)
+    async fn lookup_identity(&self, identifier: &str) -> Result<Option<serde_json::Value>, String> {
         let res = self
             .client
             .get(format!(
@@ -160,7 +165,7 @@ impl KratosConfig {
             .json()
             .await
             .map_err(|e| format!("Failed to parse Kratos identities response: {e}"))?;
-        Ok(found.first().and_then(|i| i["id"].as_str()).map(ToString::to_string))
+        Ok(found.into_iter().next())
     }
 
     /// Evict every cached verification result belonging to `session_id`.
@@ -544,5 +549,40 @@ impl IdentityProvisioningPort for KratosConfig {
 
     async fn find_identity_id(&self, identifier: &str) -> Result<Option<String>, IdentityError> {
         self.lookup_identity_id(identifier).await.map_err(IdentityError::Provider)
+    }
+
+    async fn find_username(&self, identifier: &str) -> Result<Option<String>, IdentityError> {
+        let identity = self.lookup_identity(identifier).await.map_err(IdentityError::Provider)?;
+        Ok(identity.and_then(|i| i["traits"]["username"].as_str().map(ToString::to_string)))
+    }
+
+    async fn update_email(&self, login: &str, new_email: &str) -> Result<(), IdentityError> {
+        let Some(identity) = self.lookup_identity(login).await.map_err(IdentityError::Provider)? else {
+            return Err(IdentityError::NotFound(login.to_string()));
+        };
+        let Some(id) = identity["id"].as_str() else {
+            return Err(IdentityError::Provider("identity without id".into()));
+        };
+        if identity["traits"]["email"].as_str().is_some_and(|e| e.eq_ignore_ascii_case(new_email)) {
+            return Ok(());
+        }
+        let patch = serde_json::json!([{ "op": "replace", "path": "/traits/email", "value": new_email }]);
+        let res = self
+            .client
+            .patch(format!("{}/admin/identities/{id}", self.admin_url))
+            .json(&patch)
+            .send()
+            .await
+            .map_err(|e| IdentityError::Provider(format!("Kratos Admin API request failed: {e}")))?;
+        match res.status() {
+            s if s.is_success() => Ok(()),
+            reqwest::StatusCode::CONFLICT => Err(IdentityError::Conflict(new_email.to_string())),
+            s => Err(IdentityError::Provider(format!("Kratos Admin API rejected the e-mail change with status: {s}"))),
+        }
+    }
+
+    async fn find_email(&self, identifier: &str) -> Result<Option<String>, IdentityError> {
+        let identity = self.lookup_identity(identifier).await.map_err(IdentityError::Provider)?;
+        Ok(identity.and_then(|i| i["traits"]["email"].as_str().map(ToString::to_string)))
     }
 }

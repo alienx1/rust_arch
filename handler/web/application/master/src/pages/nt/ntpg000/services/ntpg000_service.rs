@@ -50,14 +50,23 @@ impl Ntpg000Service {
     }
 
     /// Opens the push stream (`GET /stream`); `on_event` runs for every `notification` (new one)
-    /// and `changed` (read elsewhere) event, so the caller reloads the list. The browser
-    /// reconnects by itself after a drop. Dropping the returned stream closes it.
-    pub fn open_stream(on_event: impl Fn() + Clone + 'static) -> Option<NotificationStream> {
+    /// and `changed` (read elsewhere) event, so the caller reloads the list; `on_new` runs only for
+    /// a new notification (the caller makes a sound). The browser reconnects by itself after a
+    /// drop. Dropping the returned stream closes it.
+    pub fn open_stream(
+        on_event: impl Fn() + Clone + 'static,
+        on_new: impl Fn() + Clone + 'static,
+    ) -> Option<NotificationStream> {
         let source = web_sys::EventSource::new(&format!("{NOTIFICATIONS_API}/stream")).ok()?;
         let mut handlers = Vec::new();
         for name in ["notification", "changed"] {
-            let on_event = on_event.clone();
-            let handler = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |_: web_sys::MessageEvent| on_event());
+            let (on_event, on_new) = (on_event.clone(), on_new.clone());
+            let handler = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |_: web_sys::MessageEvent| {
+                on_event();
+                if name == "notification" {
+                    on_new();
+                }
+            });
             source.add_event_listener_with_callback(name, handler.as_ref().unchecked_ref()).ok()?;
             handlers.push(handler);
         }

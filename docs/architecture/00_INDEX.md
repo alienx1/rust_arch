@@ -42,6 +42,7 @@ This table maps search intents and keywords to the exact architecture document. 
 | **Network & Firewall** | Ports, DNS, NodePort, Ingress, NetworkPolicy, Mutual TLS, Secret Fan-out | [[09_NETWORK_PORTS_AND_SECURITY_MATRIX]] |
 | **Guides (ลงมือทำ)** | เพิ่มโปรแกรม, เพิ่ม service, แก้ปัญหา, เช็กลิสต์ production, เปลี่ยน schema | `docs/guides/` ([[ADD_A_PROGRAM]], [[ADD_A_SERVICE]], [[TROUBLESHOOTING]], [[PRODUCTION_CHECKLIST]]) |
 | **Valkey Read Cache** | อะไรแคช/ไม่แคช, key, TTL, การล้างเมื่อเขียน, ข้อจำกัดหลาย region | [[11_VALKEY_READ_CACHE]] |
+| **View Scope & เลือกบริษัท** | HQ เห็นภาพรวม/เลือกบริษัท, สาขาอื่นเห็นเฉพาะสาขาตัวเอง, middleware, หน้าที่ถูกกรอง | [[12_VIEW_SCOPE_COMPANY_SWITCHER]] |
 | **Project Structure & Style** | CQRS, Clean UI Frontend, Feature Layout, Tests Layer, Naming Rules, Agent Standards | [[10_PROJECT_STRUCTURE_AND_CODE_STYLE]] |
 
 ---

@@ -6,20 +6,21 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg000::errors::Dbpg000Error;
 use crate::features::db::dbpg000::models::{
-    CompanyDto, CompanyFilterQuery, ENGLISH_LANGUAGE_ID, THAI_LANGUAGE_ID, db_company,
-    db_company_label, db_organization, db_organization_label,
+    CompanyDto, CompanyFilterQuery, ENGLISH_LANGUAGE_ID, ImageOwner, THAI_LANGUAGE_ID, db_company,
+    db_company_label, db_organization, db_organization_label, image_url,
 };
 use crate::features::localization::request_language::pick;
 use domain::entity::db_master_lookup_label;
 
 use super::db_dbpg000_queries::DbDbpg000Queries;
+use crate::features::db::view_scope_filters::by_company;
 
 impl DbDbpg000Queries {
     pub(super) async fn list_companies(
         &self,
         filter: CompanyFilterQuery,
     ) -> Result<Vec<CompanyDto>, Dbpg000Error> {
-        let mut select = db_company::Entity::find();
+        let mut select = by_company(db_company::Entity::find(), db_company::Column::Id);
 
         if let Some(org_id) = filter.organization_id {
             select = select.filter(db_company::Column::OrganizationId.eq(org_id));
@@ -124,6 +125,7 @@ impl DbDbpg000Queries {
                 active: c.active,
                 name_th,
                 name_en,
+                image_url: image_url(ImageOwner::Company, c.id, c.image_key.as_deref()),
                 row_version: c.row_version,
             });
         }

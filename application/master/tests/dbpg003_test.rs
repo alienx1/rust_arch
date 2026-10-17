@@ -38,6 +38,7 @@ fn employee(department_id: Uuid, code: &str, first: &str, active: bool) -> Emplo
         active,
         has_user_account: false,
         row_version: 1,
+        image_url: None,
     }
 }
 

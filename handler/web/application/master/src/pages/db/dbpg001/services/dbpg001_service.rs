@@ -110,6 +110,38 @@ impl Dbpg001Service {
         }
     }
 
+    /// `PUT <path>` with the raw image file (`image/*`), or `DELETE <path>` when `file` is `None`;
+    /// answers the updated record
+    async fn image_call<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        file: Option<(Vec<u8>, String)>,
+        what: &str,
+    ) -> Result<T, String> {
+        let url = format!("{DBPG001_API}{path}");
+        let req = match file {
+            Some((bytes, content_type)) => self.http.put(&url).bytes(bytes, &content_type),
+            None => self.http.delete(&url),
+        };
+        Self::finish(req.send().await, what, false)
+    }
+
+    pub async fn set_organization_image(&self, id: &str, bytes: Vec<u8>, content_type: String) -> Result<OrganizationDto, String> {
+        self.image_call(&format!("/organizations/{id}/image"), Some((bytes, content_type)), &t_or("common.what.image", "รูปภาพ")).await
+    }
+
+    pub async fn remove_organization_image(&self, id: &str) -> Result<OrganizationDto, String> {
+        self.image_call(&format!("/organizations/{id}/image"), None, &t_or("common.what.image", "รูปภาพ")).await
+    }
+
+    pub async fn set_company_image(&self, id: &str, bytes: Vec<u8>, content_type: String) -> Result<CompanyDto, String> {
+        self.image_call(&format!("/companies/{id}/image"), Some((bytes, content_type)), &t_or("common.what.image", "รูปภาพ")).await
+    }
+
+    pub async fn remove_company_image(&self, id: &str) -> Result<CompanyDto, String> {
+        self.image_call(&format!("/companies/{id}/image"), None, &t_or("common.what.image", "รูปภาพ")).await
+    }
+
     /// Organizations for the parent selector
     pub async fn fetch_organizations(&self) -> Result<Vec<OrganizationDto>, String> {
         self.get("/organizations", &t_or("dbpg001.what.org", "องค์กร")).await
@@ -164,3 +196,4 @@ impl Dbpg001Service {
         ApiClient::new(DBPG001_API).delete(&format!("/companies/{id}"), &t_or("dbpg001.what.company", "บริษัท")).await
     }
 }
+

@@ -12,13 +12,17 @@ use crate::pages::db::dbpg002::models::{
     BranchDto, BranchTypeOptionDto, CompanyOptionDto, CreateBranchInput, CreateDepartmentInput,
     DepartmentDto, UpdateBranchInput, UpdateDepartmentInput,
 };
-use crate::pages::db::dbpg002::services::Dbpg002Service;
+use crate::contacts::{load_contacts, save_contacts};
+use crate::pages::db::dbpg002::services::{DBPG002_API, Dbpg002Service};
+use web_package::ui::component::ContactItem;
 use crate::routes::DBPG002;
 
 /// State of the branch form (`/db/dbpg002/branch[/:id]`)
 #[derive(Clone, Copy)]
 pub struct Dbpg002BranchFormContext {
     pub editing: ReadSignal<Option<BranchDto>>,
+    /// Contacts of the branch, edited in the form and saved with it
+    pub contacts: RwSignal<Vec<ContactItem>>,
     pub companies: ReadSignal<Vec<CompanyOptionDto>>,
     pub branch_types: ReadSignal<Vec<BranchTypeOptionDto>>,
     /// Company to pre-select when creating (`?company_id=`)
@@ -62,6 +66,10 @@ pub fn provide_dbpg002_branch_form_context(
     let (editing, set_editing) = signal(Option::<BranchDto>::None);
     let (companies, set_companies) = signal(Vec::<CompanyOptionDto>::new());
     let (branch_types, set_branch_types) = signal(Vec::<BranchTypeOptionDto>::new());
+    let contacts = RwSignal::new(Vec::<ContactItem>::new());
+    if let Some(id) = id.clone() {
+        load_contacts(DBPG002_API, format!("/branches/{id}"), contacts);
+    }
     let (default_company_id, _) = signal(default_company_id);
     let (is_loading, set_is_loading) = signal(true);
     let (is_saving, set_is_saving) = signal(false);
@@ -143,9 +151,15 @@ pub fn provide_dbpg002_branch_form_context(
                 )),
                 (None, _) => s.create_branch(input).await,
             };
+            let res = match res {
+                Ok(saved) => save_contacts(DBPG002_API, &format!("/branches/{}", saved.id), &contacts.get_untracked())
+                    .await
+                    .map_err(|e| format!("{}: {e}", t_or("common.contact.saved_partly", "บันทึกข้อมูลแล้ว แต่บันทึกช่องทางติดต่อไม่สำเร็จ"))),
+                Err(e) => Err(e),
+            };
             set_is_saving.set(false);
             match res {
-                Ok(_) => {
+                Ok(()) => {
                     track_action("DBPG002.save", "");
                     cancel.run(())
                 }
@@ -156,6 +170,7 @@ pub fn provide_dbpg002_branch_form_context(
 
     let ctx = Dbpg002BranchFormContext {
         editing,
+        contacts,
         companies,
         branch_types,
         default_company_id,

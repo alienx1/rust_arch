@@ -1,5 +1,8 @@
 //! System `DB` (Master Data) programs, one module per program code.
 
+pub mod contacts;
+pub mod image_object_store;
+pub mod view_scope_filters;
 pub mod dbpg000;
 pub mod dbpg001;
 pub mod dbpg002;

@@ -41,6 +41,14 @@ impl RequestBuilder {
         // The API localizes its error messages by language
         headers.insert("Accept-Language".to_string(), crate::core::i18n::get_saved_language());
 
+        // The company chosen in the topbar switcher (the server checks it)
+        if let Some(company) = crate::core::company_scope::get_selected_company() {
+            headers.insert("X-Company-Id".to_string(), company);
+        }
+        if let Some(branch) = crate::core::company_scope::get_selected_branch() {
+            headers.insert("X-Branch-Id".to_string(), branch);
+        }
+
         Self {
             url: url.into(),
             method,
@@ -92,6 +100,13 @@ impl RequestBuilder {
         );
         self.payload = Some(RequestPayload::Text(hex_str));
         Ok(self)
+    }
+
+    /// Sets the request body to raw bytes of the given type (e.g. an image file).
+    pub fn bytes(mut self, data: Vec<u8>, content_type: &str) -> Self {
+        self.headers.insert("Content-Type".to_string(), content_type.to_string());
+        self.payload = Some(RequestPayload::Binary(data));
+        self
     }
 
     pub fn credentials(mut self, creds: RequestCredentials) -> Self {

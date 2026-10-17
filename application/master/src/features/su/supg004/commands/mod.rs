@@ -3,15 +3,16 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
+use crate::features::su::account_security::PasswordMailResult;
 use crate::features::su::supg004::errors::Supg004Error;
 use crate::features::su::supg004::models::{
     CreateUserCommand, CreateUserResultDto, EmployeeOptionDto, EmployeeOptionsQuery,
-    GroupOptionDto, RecoveryLinkDto, ScopeOptionsDto, UpdateUserCommand, UserAccountDto, UserFilterQuery,
+    GroupOptionDto, ScopeOptionsDto, UpdateUserCommand, UserAccountDto, UserFilterQuery,
     UserPageDto,
 };
 
 mod assignment_rules;
-mod create_recovery_link;
+mod password_mail_actions;
 mod create_user;
 mod delete_user;
 mod group_lookup;
@@ -52,8 +53,13 @@ pub trait Supg004Commands: Send + Sync {
         can_assign_admin: bool,
     ) -> Result<UserAccountDto, Supg004Error>;
 
-    /// Issue a one-time link for the account holder to set a new password
-    async fn create_recovery_link(&self, id: Uuid) -> Result<RecoveryLinkDto, Supg004Error>;
+    /// E-mail the account holder a one-time link to choose a new password (the old one keeps
+    /// working until then). When the mail cannot be sent the result carries the link instead.
+    async fn send_password_mail(&self, id: Uuid) -> Result<PasswordMailResult, Supg004Error>;
+
+    /// Require a new password: the account cannot sign in until it is set, its sessions end and
+    /// the link is e-mailed
+    async fn force_password_change(&self, id: Uuid) -> Result<PasswordMailResult, Supg004Error>;
 
     /// Delete an account (not the caller's own) and then its sign-in identity at the identity
     /// provider. A record that is still referenced is refused as `InUse`.

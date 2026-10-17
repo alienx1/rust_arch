@@ -109,7 +109,7 @@ pub fn DataShowcase() -> impl IntoView {
                             view! {
                                 <TableRow class="hover:bg-muted/30 transition-colors">
                                     <TableCell class="text-center font-mono text-xs text-muted-foreground">
-                                        {data_row_number(page.get(), DEMO_PAGE_SIZE, idx)}
+                                        {data_row_number(page.get_untracked(), DEMO_PAGE_SIZE, idx)}
                                     </TableCell>
                                     <TableCell class="font-mono text-xs font-medium text-muted-foreground">
                                         {u.id}

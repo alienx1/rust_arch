@@ -1,5 +1,5 @@
 //! User account table (shared `DataTable` shell): username, employee, department / company,
-//! group, status, created, actions (edit / issue a recovery link); server-side paging.
+//! group, status, created, actions (edit); server-side paging.
 
 use leptos::prelude::*;
 use web_package::core::i18n::t_or;
@@ -101,7 +101,6 @@ pub fn UserTable() -> impl IntoView {
                 let (page_no, limit) = (page.page, page.limit);
                 page.items.into_iter().enumerate().map(|(idx, u)| {
                     let for_edit = u.clone();
-                    let for_link = u.clone();
                     view! {
                         <TableRow class="hover:bg-muted/30 transition-colors">
                             <TableCell class="text-center font-mono text-xs text-muted-foreground">
@@ -143,28 +142,22 @@ pub fn UserTable() -> impl IntoView {
                                 }
                             </TableCell>
                             <TableCell class="text-center">
-                                {if u.active {
-                                    view! { <Badge variant=BadgeVariant::Success class="text-xs">"Active"</Badge> }
-                                } else {
-                                    view! { <Badge variant=BadgeVariant::Secondary class="text-xs text-muted-foreground">"Suspended"</Badge> }
-                                }}
+                                <div class="flex flex-col items-center gap-1">
+                                    {if u.active {
+                                        view! { <Badge variant=BadgeVariant::Success class="text-xs">"Active"</Badge> }
+                                    } else {
+                                        view! { <Badge variant=BadgeVariant::Secondary class="text-xs text-muted-foreground">"Suspended"</Badge> }
+                                    }}
+                                    {u.must_change_password.then(|| view! {
+                                        <Badge variant=BadgeVariant::Secondary class="text-[10px] px-1.5">
+                                            {t_or("supg004.status.must_change", "รอตั้งรหัสผ่าน")}
+                                        </Badge>
+                                    })}
+                                </div>
                             </TableCell>
                             <TableCell class="text-xs text-muted-foreground font-mono">{date_part(&u.created_time).to_string()}</TableCell>
                             <TableCell class="text-right">
                                 <div class="flex items-center justify-end gap-1.5">
-                                    <Show when=move || can_write.get()>
-                                        <Button
-                                            variant=ButtonVariant::Outline
-                                            size=ButtonSize::Sm
-                                            class="h-7 px-2 text-xs"
-                                            on_click=Callback::new({
-                                                let u = for_link.clone();
-                                                move |_| ctx.issue_link.run(u.clone())
-                                            })
-                                        >
-                                            {t_or("supg004.action.recovery_link", "ลิงก์ตั้งรหัสผ่าน")}
-                                        </Button>
-                                    </Show>
                                     <Button
                                         variant=ButtonVariant::Ghost
                                         size=ButtonSize::Sm

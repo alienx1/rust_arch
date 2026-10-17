@@ -15,9 +15,10 @@ use crate::features::db::dbpg003::errors::Dbpg003Error;
 use crate::features::db::dbpg003::models::{
     BranchOptionDto, CompanyOptionDto, CreateEmployeeCommand, Dbpg003SummaryDto,
     DepartmentOptionDto, EmployeeDto, EmployeeFilterQuery, EmployeePageDto, PrefixOptionDto,
-    UpdateEmployeeCommand,
+    StoredImage, UpdateEmployeeCommand,
 };
 use crate::features::db::dbpg003::queries::Dbpg003Queries;
+use crate::features::db::image_object_store::ImageObjectStore;
 use crate::features::su::supg005::Supg005Commands;
 
 pub struct Dbpg003CommandExecutor {
@@ -27,16 +28,24 @@ pub struct Dbpg003CommandExecutor {
     pub(super) accounts: Option<Arc<dyn Supg005Commands>>,
     /// Valkey read-through for the rarely changing reads (off until `with_cache`)
     pub(super) caches: ReadCaches,
+    /// Object storage for the photos (images are refused until `with_images`)
+    pub(super) images: Option<ImageObjectStore>,
 }
 
 impl Dbpg003CommandExecutor {
     pub fn new(queries: Arc<dyn Dbpg003Queries>, db: DatabaseConnection) -> Self {
-        Self { queries, db, accounts: None, caches: ReadCaches::disabled() }
+        Self { queries, db, accounts: None, caches: ReadCaches::disabled(), images: None }
     }
 
     /// Reads that change rarely are served from Valkey; writes clear them (see the cache-invalidation middleware)
     pub fn with_cache(mut self, caches: ReadCaches) -> Self {
         self.caches = caches;
+        self
+    }
+
+    /// Employee photos are kept in `bucket` of `content`
+    pub fn with_images(mut self, content: Arc<dyn application_core::traits::ContentService>, bucket: impl Into<String>) -> Self {
+        self.images = Some(ImageObjectStore::new(content, bucket));
         self
     }
 
@@ -110,5 +119,19 @@ impl Dbpg003Commands for Dbpg003CommandExecutor {
 
     async fn delete_employee(&self, id: Uuid) -> Result<(), Dbpg003Error> {
         self.delete_employee(id).await
+    }
+
+    async fn set_employee_image(&self, id: Uuid, bytes: Vec<u8>) -> Result<EmployeeDto, Dbpg003Error> {
+        self.set_image(id, bytes).await?;
+        self.queries.get_employee_by_id(id).await?.ok_or_else(|| Dbpg003Error::NotFound(id.to_string()))
+    }
+
+    async fn remove_employee_image(&self, id: Uuid) -> Result<EmployeeDto, Dbpg003Error> {
+        self.remove_image(id).await?;
+        self.queries.get_employee_by_id(id).await?.ok_or_else(|| Dbpg003Error::NotFound(id.to_string()))
+    }
+
+    async fn get_employee_image(&self, id: Uuid) -> Result<StoredImage, Dbpg003Error> {
+        self.read_image(id).await
     }
 }

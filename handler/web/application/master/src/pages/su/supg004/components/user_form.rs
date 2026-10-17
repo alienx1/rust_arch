@@ -2,18 +2,18 @@
 //!
 //! Employee, email and username are chosen on create and fixed afterwards (the identity provider
 //! and history reference them); editing replaces its assignments (group @ scope unit) or suspends it.
-//! After a successful create the form is replaced by the one-time recovery link.
+//! After a successful create the form is replaced by the outcome of the set-password mail.
 
-use web_package::core::i18n::{t_or, t_fmt};
+use web_package::core::i18n::{t_fmt, t_or};
 use leptos::prelude::*;
-use web_package::ui::component::{
+use web_package::ui::component::{ConfirmButton, SaveConfirmButton, 
     Button, ButtonSize, ButtonVariant, Card, CardContent, Checkbox, DeleteConfirmButton, Input, Select,
     SelectOption,
     Spinner,
 };
 
 use crate::access::{Action, PermissionGate, can};
-use crate::pages::su::supg004::components::{AssignmentEditor, RecoveryLinkPanel};
+use crate::pages::su::supg004::components::{AssignmentEditor, PasswordMailPanel};
 use crate::pages::su::supg004::models::{UserAssignmentDto, UserFormInput, username_from_email};
 use crate::pages::su::supg004::providers::use_supg004_form;
 
@@ -128,14 +128,7 @@ pub fn UserForm() -> impl IntoView {
                             <div class="p-3 text-xs rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                                 {t_fmt("supg004.form.created", "สร้างบัญชี {username} เรียบร้อยแล้ว", &[("username", &username.to_string())])}
                             </div>
-                            {match result.recovery_link {
-                                Some(link) => view! { <RecoveryLinkPanel username=username link=link /> }.into_any(),
-                                None => view! {
-                                    <div class="p-3 text-xs rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                                        {t_fmt("supg004.form.recovery_failed", "ยังออกลิงก์ตั้งรหัสผ่านไม่สำเร็จ ({error}) — ออกใหม่ได้จากหน้ารายการ", &[("error", &result.recovery_error.unwrap_or_default().to_string())])}
-                                    </div>
-                                }.into_any(),
-                            }}
+                            <PasswordMailPanel username=username result=result.password_mail />
                             <div class="flex justify-end">
                                 <Button variant=ButtonVariant::Default size=ButtonSize::Sm on_click=Callback::new(move |_| ctx.cancel.run(()))>
                                     {t_or("supg004.form.back_to_list", "กลับไปหน้ารายการ")}
@@ -235,6 +228,61 @@ pub fn UserForm() -> impl IntoView {
 
                         </fieldset>
 
+                        // Password: only for an existing account (a new one is mailed on create)
+                        {move || is_edit.get().then(|| view! {
+                            <PermissionGate program="SUPG004" action=Action::Write>
+                                <div class="p-4 rounded-lg border border-border/60 bg-muted/20 space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-semibold text-muted-foreground">
+                                            {t_or("supg004.form.password_section", "รหัสผ่าน")}
+                                        </span>
+                                        {move || ctx.must_change.get().then(|| view! {
+                                            <span class="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                                {t_or("supg004.status.must_change", "รอตั้งรหัสผ่าน")}
+                                            </span>
+                                        })}
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <ConfirmButton
+                                            label=Signal::derive(move || t_or("supg004.action.password_mail", "ส่งอีเมลตั้งรหัสผ่าน"))
+                                            confirm_text=Signal::derive(move || {
+                                                let name = ctx.editing.get().map(|u| u.username).unwrap_or_default();
+                                                t_fmt("supg004.confirm.password_mail", "ส่งอีเมลตั้งรหัสผ่านให้ {username}?", &[("username", &name)])
+                                            })
+                                            confirm_label=Signal::derive(move || t_or("supg004.confirm.send", "ยืนยันส่ง"))
+                                            busy=ctx.is_mailing
+                                            on_confirm=Callback::new(move |_| ctx.send_password_mail.run(()))
+                                        />
+                                        <ConfirmButton
+                                            label=Signal::derive(move || t_or("supg004.action.force_change", "บังคับเปลี่ยนรหัสผ่าน"))
+                                            confirm_text=Signal::derive(move || {
+                                                let name = ctx.editing.get().map(|u| u.username).unwrap_or_default();
+                                                t_fmt(
+                                                    "supg004.confirm.force_change",
+                                                    "บังคับ {username} เปลี่ยนรหัสผ่าน? ระบบจะออกจากระบบทุกอุปกรณ์ และเข้าใช้งานไม่ได้จนกว่าจะตั้งรหัสผ่านใหม่",
+                                                    &[("username", &name)],
+                                                )
+                                            })
+                                            confirm_label=Signal::derive(move || t_or("supg004.confirm.force_do", "ยืนยันบังคับ"))
+                                            variant=ButtonVariant::Ghost
+                                            class="text-destructive hover:bg-destructive/10"
+                                            destructive=true
+                                            busy=ctx.is_mailing
+                                            on_confirm=Callback::new(move |_| ctx.force_password_change.run(()))
+                                        />
+                                        {move || ctx.is_mailing.get().then(|| view! { <Spinner class="h-4 w-4 text-primary" /> })}
+                                    </div>
+                                    <div class="text-[11px] text-muted-foreground">
+                                        {t_or("supg004.form.password_hint", "ส่งอีเมล: ผู้ใช้ตั้งรหัสผ่านใหม่ได้ รหัสเดิมยังใช้ได้จนกว่าจะตั้งใหม่ • บังคับเปลี่ยน: ออกจากระบบทุกอุปกรณ์และเข้าไม่ได้จนกว่าจะตั้งรหัสผ่านใหม่")}
+                                    </div>
+                                    {move || ctx.mail_outcome.get().map(|result| {
+                                        let name = ctx.editing.get_untracked().map(|u| u.username).unwrap_or_default();
+                                        view! { <PasswordMailPanel username=name result=result on_close=ctx.dismiss_mail /> }
+                                    })}
+                                </div>
+                            </PermissionGate>
+                        })}
+
                         <div class="flex items-center gap-2 pt-2">
                             {move || is_edit.get().then(|| view! {
                                 <PermissionGate program="SUPG004" action=Action::Approve>
@@ -255,13 +303,11 @@ pub fn UserForm() -> impl IntoView {
                                 {t_or("common.action.cancel", "ยกเลิก")}
                             </Button>
                             <PermissionGate program="SUPG004" action=Action::Write>
-                                <Button
-                                    variant=ButtonVariant::Default
-                                    size=ButtonSize::Sm
-                                    on_click=Callback::new(on_submit)
-                                >
-                                    {move || if ctx.is_saving.get() { t_or("supg004.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") }}
-                                </Button>
+                                <SaveConfirmButton
+                                    label=Signal::derive(move || if ctx.is_saving.get() { t_or("supg004.form.saving", "กำลังบันทึก...") } else { t_or("common.action.save", "บันทึกข้อมูล") })
+                                    on_confirm=Callback::new(on_submit)
+                                    busy=Signal::derive(move || ctx.is_saving.get())
+                                />
                             </PermissionGate>
                         </div>
                     </div>

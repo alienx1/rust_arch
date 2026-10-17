@@ -1,24 +1,16 @@
 //! SUPG004 list context: group / status filters, search and server-side paging of the accounts,
-//! plus issuing a recovery link for a row.
+
 
 use leptos::prelude::*;
-use crate::audit::track_action;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 
-use crate::pages::su::supg004::models::{GroupOptionDto, RecoveryLinkDto, UserAccountDto, UserPageDto};
+use crate::pages::su::supg004::models::{GroupOptionDto, UserAccountDto, UserPageDto};
 use crate::pages::su::supg004::services::{Supg004Service, UserListQuery};
 use crate::routes::supg004_user_path;
 
 /// Rows per page of the account list
 pub const PAGE_SIZE: u64 = 25;
-
-/// Recovery link issued from the list, with the account it belongs to
-#[derive(Clone, Debug, PartialEq)]
-pub struct IssuedLink {
-    pub username: String,
-    pub link: RecoveryLinkDto,
-}
 
 /// Shared reactive state for the SUPG004 list page
 #[derive(Clone, Copy)]
@@ -30,7 +22,6 @@ pub struct Supg004Context {
     pub status_filter: ReadSignal<String>,
     pub is_loading: ReadSignal<bool>,
     pub error: ReadSignal<Option<String>>,
-    pub issued_link: ReadSignal<Option<IssuedLink>>,
     pub set_group: Callback<String>,
     pub set_search: Callback<String>,
     pub set_status: Callback<String>,
@@ -40,8 +31,6 @@ pub struct Supg004Context {
     pub refresh: Callback<()>,
     pub open_create: Callback<()>,
     pub open_edit: Callback<UserAccountDto>,
-    pub issue_link: Callback<UserAccountDto>,
-    pub dismiss_link: Callback<()>,
 }
 
 /// Provides Supg004Context into the reactive tree
@@ -51,7 +40,6 @@ pub fn provide_supg004_context() -> Supg004Context {
     let (page, set_page_data) = signal(UserPageDto::default());
     let (is_loading, set_is_loading) = signal(true);
     let (error, set_error) = signal(Option::<String>::None);
-    let (issued_link, set_issued_link) = signal(Option::<IssuedLink>::None);
 
     let (group_filter, set_group_filter) = signal("ALL".to_string());
     let (search_query, set_search_query) = signal(String::new());
@@ -125,21 +113,6 @@ pub fn provide_supg004_context() -> Supg004Context {
         navigate(&supg004_user_path(Some(&u.id)), Default::default())
     });
 
-    let issue_link = Callback::new(move |u: UserAccountDto| {
-            let s = service.clone();
-            set_error.set(None);
-            spawn_local(async move {
-                match s.create_recovery_link(&u.id).await {
-                    Ok(link) => {
-                        track_action("SUPG004.recovery_link", &u.username);
-                        set_issued_link.set(Some(IssuedLink { username: u.username, link }))
-                    }
-                    Err(e) => set_error.set(Some(e)),
-                }
-            });
-    });
-    let dismiss_link = Callback::new(move |()| set_issued_link.set(None));
-
     let ctx = Supg004Context {
         groups,
         page,
@@ -148,7 +121,6 @@ pub fn provide_supg004_context() -> Supg004Context {
         status_filter,
         is_loading,
         error,
-        issued_link,
         set_group,
         set_search,
         set_status,
@@ -157,8 +129,6 @@ pub fn provide_supg004_context() -> Supg004Context {
         refresh,
         open_create,
         open_edit,
-        issue_link,
-        dismiss_link,
     };
     provide_context(ctx);
     ctx

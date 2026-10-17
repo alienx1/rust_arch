@@ -56,6 +56,8 @@ impl Dbpg001CommandExecutor {
             code: Set(code),
             registration_number: Set(cmd.registration_number.trim().to_string()),
             active: Set(cmd.active),
+            contact_group_id: Set(None),
+            image_key: Set(None),
             change_by: Set(actor_id),
             row_version: Set(1),
         };

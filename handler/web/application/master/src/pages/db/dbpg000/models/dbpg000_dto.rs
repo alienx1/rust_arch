@@ -128,6 +128,9 @@ pub struct OrganizationDto {
     pub name_th: String,
     pub name_en: String,
     pub company_count: u64,
+    /// Logo URL for `<img src>`
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }
 
@@ -153,6 +156,9 @@ pub struct CompanyDto {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Logo URL for `<img src>`
+    #[serde(default)]
+    pub image_url: Option<String>,
     pub row_version: i64,
 }
 

@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg001::errors::Dbpg001Error;
 use crate::features::db::dbpg001::models::{db_company, db_company_label};
+use crate::features::db::contacts::delete_contact_group;
 use crate::features::referential_integrity::is_foreign_key_violation;
 
 use super::dbpg001_executor::Dbpg001CommandExecutor;
@@ -25,10 +26,12 @@ impl Dbpg001CommandExecutor {
         };
 
         let txn = self.db.begin().await?;
+        let image_key = db_company::Entity::find_by_id(id).one(&txn).await?.and_then(|c| c.image_key);
         let existing = db_company::Entity::find_by_id(id).one(&txn).await?;
-        if existing.is_none() {
+        let Some(existing) = existing else {
             return Err(Dbpg001Error::NotFound(id.to_string()));
-        }
+        };
+        let contact_group = existing.contact_group_id;
 
         db_company_label::Entity::delete_many()
             .filter(db_company_label::Column::CompanyId.eq(id))
@@ -39,7 +42,13 @@ impl Dbpg001CommandExecutor {
             .exec(&txn)
             .await
             .map_err(in_use)?;
+        if let Some(group) = contact_group {
+            delete_contact_group(&txn, group).await.map_err(in_use)?;
+        }
         txn.commit().await.map_err(in_use)?;
+        if let Some(key) = image_key {
+            self.forget_object(&key).await;
+        }
         Ok(())
     }
 }

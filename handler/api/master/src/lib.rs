@@ -5,6 +5,7 @@
 pub mod cache_policy;
 pub mod connection;
 pub mod routers;
+pub mod view_scope_layer;
 
 pub use connection::*;
 pub use routers::*;

@@ -8,7 +8,9 @@ use leptos::task::spawn_local;
 use web_package::core::auth::use_auth;
 
 use crate::pages::nt::ntpg000::models::NotificationDto;
-use crate::pages::nt::ntpg000::services::{NotificationStream, Ntpg000Service};
+use crate::pages::nt::ntpg000::services::{
+    NotificationStream, Ntpg000Service, play_chime, save_sound_enabled, sound_enabled, unlock_audio_on_first_gesture,
+};
 
 /// Notifications the bell lists
 pub const BELL_ITEMS: u64 = 10;
@@ -21,6 +23,9 @@ pub struct Notifications {
     pub unread: ReadSignal<u64>,
     /// Counts every reload caused by a push: pages watch it to refresh themselves
     pub changes: ReadSignal<u64>,
+    /// The user wants a chime for a new notification (kept in the browser)
+    pub sound_on: ReadSignal<bool>,
+    pub toggle_sound: Callback<()>,
     /// Marks one as read (server side), then reloads
     pub mark_read: Callback<String>,
     /// Marks everything as read (server side), then reloads
@@ -33,7 +38,9 @@ pub fn provide_notifications() -> Notifications {
     let (items, set_items) = signal(Vec::<NotificationDto>::new());
     let (unread, set_unread) = signal(0u64);
     let (changes, set_changes) = signal(0u64);
+    let (sound_on, set_sound_on) = signal(sound_enabled());
     let stream = StoredValue::new_local(Option::<NotificationStream>::None);
+    unlock_audio_on_first_gesture();
 
     let reload = {
         let service = service.clone();
@@ -56,10 +63,17 @@ pub fn provide_notifications() -> Notifications {
             if auth.is_authenticated.get() && stream.with_value(Option::is_none) {
                 reload();
                 let on_push = reload.clone();
-                stream.set_value(Ntpg000Service::open_stream(move || {
-                    set_changes.update(|c| *c += 1);
-                    on_push();
-                }));
+                stream.set_value(Ntpg000Service::open_stream(
+                    move || {
+                        set_changes.update(|c| *c += 1);
+                        on_push();
+                    },
+                    move || {
+                        if sound_on.get_untracked() {
+                            play_chime();
+                        }
+                    },
+                ));
             }
         });
     }
@@ -71,6 +85,16 @@ pub fn provide_notifications() -> Notifications {
         items,
         unread,
         changes,
+        sound_on,
+        toggle_sound: Callback::new(move |()| {
+            let on = !sound_on.get_untracked();
+            set_sound_on.set(on);
+            save_sound_enabled(on);
+            if on {
+                // The click that switches it on is also a preview of what it sounds like
+                play_chime();
+            }
+        }),
         mark_read: {
             let (service, reload) = (service.clone(), reload.clone());
             Callback::new(move |id: String| {

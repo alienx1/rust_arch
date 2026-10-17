@@ -2,14 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::recovery_link_dto::RecoveryLinkDto;
 use super::user_account_dto::UserAccountDto;
+use crate::features::su::account_security::PasswordMailResult;
 
-/// Outcome of creating an account. The account exists even when no recovery link could be made;
-/// issue one later from the list.
+/// Outcome of creating an account. The account exists even when the mail could not be sent: the
+/// result then carries the link to hand over, and a mail can be sent again from the list.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreateUserResultDto {
     pub user: UserAccountDto,
-    pub recovery_link: Option<RecoveryLinkDto>,
-    pub recovery_error: Option<String>,
+    /// The e-mail with the link to set the first password
+    pub password_mail: PasswordMailResult,
 }

@@ -7,12 +7,17 @@ use crate::features::db::dbpg002::queries::db_dbpg002_queries::fold_names;
 use crate::features::db::dbpg003::errors::Dbpg003Error;
 use crate::features::db::dbpg003::models::DepartmentOptionDto;
 use crate::features::db::dbpg003::queries::db_dbpg003_queries::DbDbpg003Queries;
+use crate::features::db::view_scope_filters::{by_branch_data, by_company};
 
 impl DbDbpg003Queries {
     pub(super) async fn list_department_options(
         &self,
     ) -> Result<Vec<DepartmentOptionDto>, Dbpg003Error> {
-        let departments = db_department::Entity::find()
+        let departments = by_branch_data(
+            by_company(db_department::Entity::find(), db_department::Column::CompanyId),
+            db_department::Column::BranchId,
+            db_department::Column::Id,
+        )
             .order_by_asc(db_department::Column::Code)
             .all(&self.db)
             .await?;
