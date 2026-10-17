@@ -52,6 +52,7 @@ fn entry(category: &str, key: &str) -> LabelEntryDto {
             language_code: "th".to_string(),
             value: "ข้อความ".to_string(),
         }],
+        row_version: 1,
     }
 }
 
@@ -137,7 +138,8 @@ fn json_request(method: &str, uri: &str, body: serde_json::Value) -> Request<Bod
 fn label_body(key: &str) -> serde_json::Value {
     serde_json::json!({
         "category": "menu", "key": key,
-        "values": [{ "language_id": Uuid::now_v7(), "value": "ข้อความ" }]
+        "values": [{ "language_id": Uuid::now_v7(), "value": "ข้อความ" }],
+        "row_version": 1
     })
 }
 

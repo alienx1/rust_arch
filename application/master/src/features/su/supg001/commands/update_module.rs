@@ -1,7 +1,9 @@
 //! SUPG001 update a module: names / status with optimistic lock, protected modules stay on
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::supg001_executor::Supg001CommandExecutor;
 use super::unit_label_writes::put_module_label;
@@ -24,9 +26,6 @@ impl Supg001CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Supg001Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Supg001Error::VersionConflict);
-        }
         if existing.active && !cmd.active && is_protected_module(&existing.code) {
             return Err(Supg001Error::Validation(format!(
                 "Module '{}' hosts the security administration and cannot be switched off",
@@ -39,8 +38,7 @@ impl Supg001CommandExecutor {
         let mut am: db_module::ActiveModel = existing.into();
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_module::Column::Id, db_module::Column::RowVersion), id, cmd.row_version).await?;
         put_module_label(&txn, id, THAI_LANGUAGE_ID, th, actor_id, next).await?;
         if !cmd.name_en.trim().is_empty() {
             put_module_label(&txn, id, ENGLISH_LANGUAGE_ID, cmd.name_en.trim().to_string(), actor_id, next).await?;

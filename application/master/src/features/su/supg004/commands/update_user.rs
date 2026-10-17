@@ -1,9 +1,11 @@
 //! SUPG004 update-user action: replaces an account's assignments and/or switches it on / off
 //! (identity provider first, then the local flag).
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::collections::HashSet;
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::supg004_executor::Supg004CommandExecutor;
 use crate::features::su::supg004::errors::Supg004Error;
@@ -21,9 +23,6 @@ impl Supg004CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Supg004Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Supg004Error::VersionConflict);
-        }
 
         let (assignments, groups) = self.validate_assignments(&cmd.assignments).await?;
         let primary_group = assignments[0].0;
@@ -67,13 +66,12 @@ impl Supg004CommandExecutor {
                 ));
             }
 
-            let next = existing.row_version + 1;
+            let _next = existing.row_version + 1;
             let txn = self.db.begin().await?;
             let mut am: su_user::ActiveModel = existing.into();
             am.permission_group_id = Set(primary_group);
             am.change_by = Set(actor_id);
-            am.row_version = Set(next);
-            am.update(&txn).await?;
+            update_versioned(&txn, am, (su_user::Column::Id, su_user::Column::RowVersion), id, cmd.row_version).await?;
             self.write_assignments(&txn, id, &assignments, actor_id).await?;
             txn.commit().await?;
         }

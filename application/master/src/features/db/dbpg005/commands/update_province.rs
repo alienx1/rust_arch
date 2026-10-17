@@ -1,7 +1,9 @@
 //! Update a province's names / status (optimistic lock; code and parents are fixed)
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::dbpg005_executor::Dbpg005CommandExecutor;
 use super::geo_input_rules::thai_name;
@@ -23,17 +25,13 @@ impl Dbpg005CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg005Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg005Error::VersionConflict);
-        }
         let next = existing.row_version + 1;
 
         let txn = self.db.begin().await?;
         let mut am: db_province::ActiveModel = existing.into();
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_province::Column::Id, db_province::Column::RowVersion), id, cmd.row_version).await?;
         put_province_label(&txn, id, THAI_LANGUAGE_ID, th, actor_id, next).await?;
         if !cmd.name_en.trim().is_empty() {
             put_province_label(&txn, id, ENGLISH_LANGUAGE_ID, cmd.name_en.trim().to_string(), actor_id, next).await?;

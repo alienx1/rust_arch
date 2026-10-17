@@ -38,7 +38,9 @@ impl DbDbpg006Queries {
             .collect();
 
         let mut grouped: HashMap<(String, String), Vec<LabelValueDto>> = HashMap::new();
+        let mut versions: HashMap<(String, String), i64> = HashMap::new();
         for row in rows {
+            *versions.entry((row.category.clone(), row.key.clone())).or_default() += row.row_version;
             grouped
                 .entry((row.category, row.key))
                 .or_default()
@@ -61,7 +63,8 @@ impl DbDbpg006Queries {
                     (a.language_id != THAI_LANGUAGE_ID, &a.language_code)
                         .cmp(&(b.language_id != THAI_LANGUAGE_ID, &b.language_code))
                 });
-                Some(LabelEntryDto { category: category.clone(), key: key.clone(), values })
+                let row_version = versions.get(&(category.clone(), key.clone())).copied().unwrap_or_default();
+                Some(LabelEntryDto { category: category.clone(), key: key.clone(), values, row_version })
             })
             .collect())
     }

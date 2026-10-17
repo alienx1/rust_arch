@@ -14,6 +14,9 @@ pub enum Dbpg006Error {
     #[error("Duplicate label: {0}")]
     Duplicate(String),
 
+    #[error("Version conflict: the label was changed by someone else")]
+    VersionConflict,
+
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -23,6 +26,10 @@ pub enum Dbpg006Error {
 
 impl From<DbErr> for Dbpg006Error {
     fn from(err: DbErr) -> Self {
-        Dbpg006Error::Database(err.to_string())
+        match err {
+            // `update_versioned` found the row at another version (or gone): somebody saved first
+            DbErr::RecordNotUpdated => Dbpg006Error::VersionConflict,
+            other => Dbpg006Error::Database(other.to_string()),
+        }
     }
 }

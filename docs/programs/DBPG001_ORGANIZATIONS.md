@@ -160,7 +160,7 @@ graph LR
 - **Application CQRS Layer**: [`features/db/dbpg001/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/application/master/src/features/db/dbpg001/)
   - Executor: [`dbpg001_executor.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/application/master/src/features/db/dbpg001/commands/dbpg001_executor.rs)
   - Commands: `CreateOrganizationCommand`, `UpdateOrganizationCommand`, `CreateCompanyCommand`, `UpdateCompanyCommand`
-  - Optimistic Lock Check: `row_version` matching
+  - Optimistic Lock Check: `row_version` — บันทึกผ่าน `update_versioned` (`UPDATE … WHERE id AND row_version = <ที่โหลดมา>`; ไม่ตรง → 412 `VERSION_CONFLICT`) แถวหลักและชื่อ (label) เขียนใน transaction เดียว
 - **Domain Entities**:
   - `domain::entity::db_organization`
   - `domain::entity::db_organization_label`

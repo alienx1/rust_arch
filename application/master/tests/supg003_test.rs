@@ -37,7 +37,7 @@ fn test_group_and_matrix_dtos_carry_no_scope() {
     assert_eq!((create.code.as_str(), create.active), ("HR", true));
     let update: UpdatePermissionGroupCommand = serde_json::from_str(r#"{"active":false,"row_version":3}"#).unwrap();
     assert_eq!((update.active, update.row_version), (false, 3));
-    let save: SaveMatrixCommand = serde_json::from_str(r#"{"grants":[]}"#).unwrap();
+    let save: SaveMatrixCommand = serde_json::from_str(r#"{"grants":[],"row_version":1}"#).unwrap();
     assert!(save.grants.is_empty());
 }
 

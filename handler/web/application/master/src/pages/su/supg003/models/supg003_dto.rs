@@ -72,4 +72,6 @@ pub struct GrantInput {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SaveMatrixInput {
     pub grants: Vec<GrantInput>,
+    /// Version of the group the matrix was loaded with (a conflict when it changed meanwhile)
+    pub row_version: i64,
 }

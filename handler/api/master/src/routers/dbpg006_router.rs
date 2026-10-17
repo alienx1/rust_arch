@@ -68,6 +68,11 @@ impl IntoResponse for Dbpg006ApiError {
         let (status, code, msg) = match &self.0 {
             Dbpg006Error::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg.clone()),
             Dbpg006Error::Duplicate(msg) => (StatusCode::CONFLICT, "DUPLICATE", msg.clone()),
+            Dbpg006Error::VersionConflict => (
+                StatusCode::PRECONDITION_FAILED,
+                "VERSION_CONFLICT",
+                "Data has been modified by another transaction. Please reload and try again.".to_string(),
+            ),
             Dbpg006Error::Validation(msg) => {
                 (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg.clone())
             }

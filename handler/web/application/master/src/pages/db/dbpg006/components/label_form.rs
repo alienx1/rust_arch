@@ -121,7 +121,7 @@ pub fn LabelForm() -> impl IntoView {
         }
         set_error_msg.set(None);
 
-        ctx.save.run(SaveLabelInput { category, key: k, values });
+        ctx.save.run(SaveLabelInput { category, key: k, values, row_version: 0 });
     };
 
     view! {

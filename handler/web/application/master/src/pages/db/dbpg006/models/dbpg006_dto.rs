@@ -36,6 +36,9 @@ pub struct LabelEntryDto {
     pub category: String,
     pub key: String,
     pub values: Vec<LabelValueDto>,
+    /// Version of the entry as loaded (sent back on save; 0 for a new entry)
+    #[serde(default)]
+    pub row_version: i64,
 }
 
 /// One page of entries
@@ -61,4 +64,7 @@ pub struct SaveLabelInput {
     pub category: String,
     pub key: String,
     pub values: Vec<LabelValueInput>,
+    /// Version of the entry being edited (filled in by the form context)
+    #[serde(default)]
+    pub row_version: i64,
 }

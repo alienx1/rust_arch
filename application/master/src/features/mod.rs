@@ -5,6 +5,7 @@ pub mod dashboard;
 pub mod db;
 pub mod su;
 pub mod localization;
+pub mod optimistic_update;
 pub mod referential_integrity;
 
 pub use al::alpg000::{

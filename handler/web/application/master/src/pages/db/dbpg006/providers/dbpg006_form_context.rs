@@ -98,8 +98,10 @@ pub fn provide_dbpg006_form_context(
     });
 
     let is_edit = target.is_some();
-    let save = Callback::new(move |input: SaveLabelInput| {
+    let save = Callback::new(move |mut input: SaveLabelInput| {
         let s = service.clone();
+        // The version the entry was loaded with travels with the save
+        input.row_version = editing.get_untracked().map(|e| e.row_version).unwrap_or(0);
         set_is_saving.set(true);
         set_error.set(None);
         spawn_local(async move {

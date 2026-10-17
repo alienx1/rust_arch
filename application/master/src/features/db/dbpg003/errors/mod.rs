@@ -29,6 +29,10 @@ pub enum Dbpg003Error {
 
 impl From<DbErr> for Dbpg003Error {
     fn from(err: DbErr) -> Self {
-        Dbpg003Error::Database(err.to_string())
+        match err {
+            // `update_versioned` found the row at another version (or gone): somebody saved first
+            DbErr::RecordNotUpdated => Dbpg003Error::VersionConflict,
+            other => Dbpg003Error::Database(other.to_string()),
+        }
     }
 }

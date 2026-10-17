@@ -1,7 +1,9 @@
 //! SUPG002 update a program: optimistic lock, protected programs stay on, no move below itself
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::program_label_writes::put_label;
 use super::program_rules::{normalize_icon, normalize_program_path, thai_name};
@@ -27,9 +29,6 @@ impl Supg002CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Supg002Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Supg002Error::VersionConflict);
-        }
         if existing.active && !cmd.active && is_protected_program(&existing.code) {
             return Err(Supg002Error::Validation(format!(
                 "'{}' administers the menu and permissions and cannot be switched off",
@@ -47,8 +46,7 @@ impl Supg002CommandExecutor {
         am.sort_order = Set(cmd.sort_order);
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_program::Column::Id, db_program::Column::RowVersion), id, cmd.row_version).await?;
         put_label(&txn, id, THAI_LANGUAGE_ID, th, actor_id, next).await?;
         if !cmd.name_en.trim().is_empty() {
             put_label(&txn, id, ENGLISH_LANGUAGE_ID, cmd.name_en.trim().to_string(), actor_id, next).await?;

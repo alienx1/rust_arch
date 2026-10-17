@@ -149,11 +149,15 @@ pub fn provide_supg003_matrix_context(id: String) -> Supg003MatrixContext {
                 .into_iter()
                 .map(|r| GrantInput { program_id: r.program_id, read: r.read, write: r.write, approve: r.approve })
                 .collect::<Vec<_>>();
+            let Some(row_version) = group.get_untracked().map(|g| g.row_version) else {
+                set_error.set(Some(t_or("supg003.matrix.err_not_loaded", "ยังโหลดข้อมูลไม่สำเร็จ ไม่สามารถบันทึกได้")));
+                return;
+            };
             set_is_saving.set(true);
             set_error.set(None);
             set_notice.set(None);
             spawn_local(async move {
-                match s.save_matrix(&id, SaveMatrixInput { grants }).await {
+                match s.save_matrix(&id, SaveMatrixInput { grants, row_version }).await {
                     Ok(m) => {
                         set_group.set(Some(m.group));
                         set_rows.set(m.rows);

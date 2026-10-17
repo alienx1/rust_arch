@@ -96,6 +96,7 @@ pages/<feature>/
 ```
 - **STRICT BAN on generic files**: Use `<feature>_dto.rs`, `<feature>_service.rs`, `<feature>_context.rs`, `<widget_name>.rs`, `<feature>_screen.rs`.
 - **Tables**: list tables MUST use the shared `web_package::ui::component::DataTable` (header with search/refresh/actions, `FilterChips`, loading/empty states, numbered pagination) — same look as `/su/supg005`. Pages supply only `DataColumn`s and the `<TableRow>`s; do not hand-roll a `Card` + `Table` shell.
+- **Optimistic locking**: edit commands carry the `row_version` the form loaded and save through `features::optimistic_update::update_versioned` (never compare or `+ 1` the version by hand); a stale save is `VersionConflict` → HTTP 412 `VERSION_CONFLICT`. See `docs/architecture/05_DATA_CONSISTENCY_AND_STORAGE.md` §2.2.
 - **Two-level decision for data-changing buttons**: every button that changes data (save, delete, suspend/reactivate, revoke, force change, send mail, re-process, mark all read ...) MUST ask for confirmation before it acts: use `web_package::ui::component::{ConfirmButton, SaveConfirmButton, DeleteConfirmButton}` (first click shows "are you sure?" in place, second click runs the action). Never call a mutating callback straight from `on_click`. Buttons that only navigate, filter, page, preview or download are exempt.
 - **Environment Gating for Static Demos**: Interactive demo / playground pages (`/demo`) must be conditionally rendered only in `localhost` or `dev` environments via `is_dev_env()`, both in route definitions and in `AppShell` sidebars.
 

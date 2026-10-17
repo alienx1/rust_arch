@@ -1,7 +1,9 @@
 //! Update a postal code value / status (optimistic lock; its area is fixed)
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{TransactionTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::dbpg005_executor::Dbpg005CommandExecutor;
 use super::geo_input_rules::normalize_postal_code;
@@ -20,9 +22,6 @@ impl Dbpg005CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg005Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg005Error::VersionConflict);
-        }
 
         if existing.postal_code != postal_code {
             let mut dup = db_postal_code::Entity::find()
@@ -40,13 +39,14 @@ impl Dbpg005CommandExecutor {
             }
         }
 
-        let next = existing.row_version + 1;
+        let _next = existing.row_version + 1;
+        let txn = self.db.begin().await?;
         let mut am: db_postal_code::ActiveModel = existing.into();
         am.postal_code = Set(postal_code);
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next);
-        am.update(&self.db).await?;
+        update_versioned(&txn, am, (db_postal_code::Column::Id, db_postal_code::Column::RowVersion), id, cmd.row_version).await?;
+        txn.commit().await?;
 
         self.queries
             .get_postal_code(id)

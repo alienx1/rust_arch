@@ -45,6 +45,11 @@ features/xx/xxpgnnn/
 - กฎการทำงาน: validate/normalize ใน `commands` (ดู `filter_rules.rs`), query ล้วนอยู่ใน `queries`, **ห้าม import `handler/*` หรือ driver ตรง ๆ** — ต้องใช้ port จาก `application-core` (เช่น `EventService`, `CacheService`)
 - ทำให้ทดสอบง่าย: executor รับ `Arc<dyn …Queries>` (+ port อื่นผ่าน `with_xxx(...)`) — ใน test ใช้ mock ในหน่วยความจำ
 - ถ้าอ่านข้อมูลที่ "อ่านบ่อยแก้น้อย" ให้ห่อด้วยแคช (หัวข้อ 6)
+- **Optimistic locking (command แก้ไข)**: `Update…Command` ต้องมี `row_version: i64` (ค่าที่ฟอร์มโหลดมา) แล้วบันทึกผ่าน helper กลางตัวเดียว — ห้ามเทียบเวอร์ชันหรือ `+ 1` เอง:
+  ```rust
+  update_versioned(&txn, am, (db_x::Column::Id, db_x::Column::RowVersion), id, cmd.row_version).await?;
+  ```
+  (`crate::features::optimistic_update`) ตั้งเฉพาะคอลัมน์ที่เปลี่ยนบน `am` helper ส่ง `UPDATE … SET …, row_version = row_version + 1 WHERE id = ? AND row_version = ?` ถ้าไม่มีแถวตรง → `DbErr::RecordNotUpdated` ต้องให้ `From<DbErr>` ของ errors map เป็น `VersionConflict` (ทำไว้แล้วในทุกโปรแกรม; โปรแกรมใหม่เพิ่ม arm `DbErr::RecordNotUpdated => Self::VersionConflict`) และ router ตอบ **412 `VERSION_CONFLICT`** เขียนแถวหลักก่อนแถวลูกใน transaction เดียวกัน
 
 ## 3. ชั้น API — `handler/api/master/`
 
@@ -127,4 +132,4 @@ pages/xx/xxpgnnn/
 | คลาส Tailwind ที่ประกอบด้วย `format!("w-{n}")` ไม่มีผล | CSS ถูกคอมไพล์จากข้อความที่ปรากฏใน `.rs` ตรง ๆ: ต้องเขียนชื่อคลาสเต็ม (`"w-4"`, `"w-8"`) หรือใส่ใน `safelist` ของ `tailwind.config.js` |
 | เว็บยังเป็นของเก่า | trunk ยัง build ไม่เสร็จ (wasm ใหญ่) หรือแคชเบราว์เซอร์ — hard reload |
 | เพิ่ม `web-sys` API แล้วคอมไพล์ไม่ผ่าน | ต้องเปิด feature ใน `Cargo.toml` ของ `handler/web/package` และ `handler/web/application/master` |
-| `row_version` ไม่ตรง (409/400) | ฟอร์มแก้ไขต้องส่ง `row_version` ที่อ่านมาล่าสุดกลับ |
+| `row_version` ไม่ตรง (412 `VERSION_CONFLICT`) | ฟอร์มแก้ไขต้องส่ง `row_version` ที่อ่านมาล่าสุดกลับ; command ต้องบันทึกผ่าน `update_versioned` (หัวข้อ 2) และ `From<DbErr>` ต้อง map `RecordNotUpdated` เป็น `VersionConflict` |

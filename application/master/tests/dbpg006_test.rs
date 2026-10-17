@@ -49,6 +49,7 @@ fn entry(category: &str, key: &str, th: &str) -> LabelEntryDto {
             language_code: "th".to_string(),
             value: th.to_string(),
         }],
+        row_version: 1,
     }
 }
 
@@ -179,6 +180,7 @@ async fn test_update_and_delete_need_an_existing_entry() {
         category: "menu".to_string(),
         key: key.to_string(),
         values: input("y"),
+        row_version: 1,
     };
 
     assert!(cmds.update_label(update("settings"), None).await.is_ok());

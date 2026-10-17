@@ -179,7 +179,7 @@ async fn test_matrix_route_has_no_scope_and_save_passes_through() {
         .oneshot(json_request(
             "PUT",
             &format!("/su/supg003/groups/{id}/matrix"),
-            serde_json::json!({ "grants": [{ "program_id": program, "read": true, "write": false, "approve": false }] }),
+            serde_json::json!({ "grants": [{ "program_id": program, "read": true, "write": false, "approve": false }], "row_version": 1 }),
         ))
         .await
         .unwrap();
@@ -200,7 +200,7 @@ async fn test_saving_a_matrix_needs_write_and_maps_validation_errors() {
         json_request(
             "PUT",
             &format!("/su/supg003/groups/{id}/matrix"),
-            serde_json::json!({ "grants": [{ "program_id": Uuid::now_v7(), "read": read, "write": write, "approve": false }] }),
+            serde_json::json!({ "grants": [{ "program_id": Uuid::now_v7(), "read": read, "write": write, "approve": false }], "row_version": 1 }),
         )
     };
 

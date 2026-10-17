@@ -3,6 +3,8 @@
 use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
 use uuid::Uuid;
 
+use crate::features::optimistic_update::update_versioned;
+
 use super::employee_input_rules::required;
 use super::person_name_writer::{NameInput, write_names};
 use crate::features::db::dbpg003::commands::dbpg003_executor::Dbpg003CommandExecutor;
@@ -26,9 +28,6 @@ impl Dbpg003CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg003Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg003Error::VersionConflict);
-        }
 
         let department = self.department(cmd.department_id).await?;
         self.check_prefix(cmd.prefix_id).await?;
@@ -72,8 +71,7 @@ impl Dbpg003CommandExecutor {
         am.code = Set(code);
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next_version);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_employee::Column::Id, db_employee::Column::RowVersion), id, cmd.row_version).await?;
         txn.commit().await?;
 
         // A switched-off employee cannot keep a working account; switching the employee back on

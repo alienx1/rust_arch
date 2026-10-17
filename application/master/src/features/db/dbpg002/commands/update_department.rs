@@ -1,7 +1,9 @@
 //! DBPG002 write: update a department (optionally moving it to another branch) with optimistic lock
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::department_label_writer::upsert_department_label;
 use super::name_rules::required;
@@ -25,9 +27,6 @@ impl Dbpg002CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg002Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg002Error::VersionConflict);
-        }
 
         let branch = db_branch::Entity::find_by_id(cmd.branch_id)
             .one(&self.db)
@@ -61,8 +60,7 @@ impl Dbpg002CommandExecutor {
         am.code = Set(code);
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next_version);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_department::Column::Id, db_department::Column::RowVersion), id, cmd.row_version).await?;
 
         let name_th = cmd.name_th.trim().to_string();
         if !name_th.is_empty() {

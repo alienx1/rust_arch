@@ -10,4 +10,6 @@ pub struct UpdateLabelCommand {
     pub category: String,
     pub key: String,
     pub values: Vec<LabelValueInput>,
+    /// `row_version` of the entry as loaded
+    pub row_version: i64,
 }

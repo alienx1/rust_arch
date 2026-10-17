@@ -16,4 +16,7 @@ pub struct GrantDto {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SaveMatrixCommand {
     pub grants: Vec<GrantDto>,
+    /// Row version of the group the matrix was loaded with; a matrix saved meanwhile (or a group
+    /// changed) is a version conflict. The group's version moves up by one when the matrix changes.
+    pub row_version: i64,
 }

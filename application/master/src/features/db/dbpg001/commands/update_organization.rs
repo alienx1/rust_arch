@@ -1,7 +1,9 @@
 //! DBPG001 command: update an organization with optimistic lock verification
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{TransactionTrait, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use crate::features::db::dbpg001::errors::Dbpg001Error;
 use crate::features::db::dbpg001::models::{
@@ -30,9 +32,6 @@ impl Dbpg001CommandExecutor {
             .await?
             .ok_or_else(|| Dbpg001Error::NotFound(id.to_string()))?;
 
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg001Error::VersionConflict);
-        }
 
         // Check duplicate code if code changed
         if existing.code != code {
@@ -49,19 +48,19 @@ impl Dbpg001CommandExecutor {
         }
 
         let next_version = existing.row_version + 1;
+        let txn = self.db.begin().await?;
         let mut active_model: db_organization::ActiveModel = existing.into();
         active_model.code = Set(code);
         active_model.registration_number = Set(cmd.registration_number.trim().to_string());
         active_model.active = Set(cmd.active);
         active_model.change_by = Set(actor_id);
-        active_model.row_version = Set(next_version);
-        active_model.update(&self.db).await?;
+        update_versioned(&txn, active_model, (db_organization::Column::Id, db_organization::Column::RowVersion), id, cmd.row_version).await?;
 
         // Update Thai label
         let name_th = cmd.name_th.trim().to_string();
         if !name_th.is_empty() {
             match db_organization_label::Entity::find_by_id((id, THAI_LANGUAGE_ID))
-                .one(&self.db)
+                .one(&txn)
                 .await?
             {
                 Some(existing_lbl) => {
@@ -69,7 +68,7 @@ impl Dbpg001CommandExecutor {
                     lbl_am.label = Set(name_th);
                     lbl_am.change_by = Set(actor_id);
                     lbl_am.row_version = Set(next_version);
-                    lbl_am.update(&self.db).await?;
+                    lbl_am.update(&txn).await?;
                 }
                 None => {
                     let lbl_am = db_organization_label::ActiveModel {
@@ -79,7 +78,7 @@ impl Dbpg001CommandExecutor {
                         change_by: Set(actor_id),
                         row_version: Set(1),
                     };
-                    lbl_am.insert(&self.db).await?;
+                    lbl_am.insert(&txn).await?;
                 }
             }
         }
@@ -88,7 +87,7 @@ impl Dbpg001CommandExecutor {
         let name_en = cmd.name_en.trim().to_string();
         if !name_en.is_empty() {
             match db_organization_label::Entity::find_by_id((id, ENGLISH_LANGUAGE_ID))
-                .one(&self.db)
+                .one(&txn)
                 .await?
             {
                 Some(existing_lbl) => {
@@ -96,7 +95,7 @@ impl Dbpg001CommandExecutor {
                     lbl_am.label = Set(name_en);
                     lbl_am.change_by = Set(actor_id);
                     lbl_am.row_version = Set(next_version);
-                    lbl_am.update(&self.db).await?;
+                    lbl_am.update(&txn).await?;
                 }
                 None => {
                     let lbl_am = db_organization_label::ActiveModel {
@@ -106,10 +105,12 @@ impl Dbpg001CommandExecutor {
                         change_by: Set(actor_id),
                         row_version: Set(1),
                     };
-                    lbl_am.insert(&self.db).await?;
+                    lbl_am.insert(&txn).await?;
                 }
             }
         }
+
+        txn.commit().await?;
 
         self.queries
             .get_organization_by_id(id)

@@ -1,7 +1,9 @@
 //! DBPG002 write: update a branch with optimistic lock verification
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::branch_label_writer::upsert_branch_label;
 use super::name_rules::required;
@@ -24,9 +26,6 @@ impl Dbpg002CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg002Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg002Error::VersionConflict);
-        }
 
         if existing.code != code {
             let duplicate = db_branch::Entity::find()
@@ -52,8 +51,7 @@ impl Dbpg002CommandExecutor {
         am.master_lookup_id = Set(cmd.master_lookup_id);
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next_version);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_branch::Column::Id, db_branch::Column::RowVersion), id, cmd.row_version).await?;
 
         let name_th = cmd.name_th.trim().to_string();
         if !name_th.is_empty() {

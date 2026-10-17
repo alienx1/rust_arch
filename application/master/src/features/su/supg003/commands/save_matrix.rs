@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 use tracing::info;
 use uuid::Uuid;
 
+use crate::features::optimistic_update::update_versioned;
+
 use super::supg003_executor::Supg003CommandExecutor;
 use crate::features::su::supg003::errors::Supg003Error;
 use crate::features::su::supg003::models::{
@@ -212,6 +214,18 @@ impl Supg003CommandExecutor {
             }
             .insert(&txn)
             .await?;
+        }
+        // The matrix is part of the group: a changed matrix moves the group's version on (and a stale
+        // copy fails here); a save that changes nothing leaves the version alone
+        if plan.activate.is_empty() && plan.deactivate.is_empty() && plan.insert.is_empty() {
+            let current = su_permission_group::Entity::find_by_id(id).one(&txn).await?.map(|g| g.row_version);
+            if current != Some(cmd.row_version) {
+                return Err(Supg003Error::VersionConflict);
+            }
+        } else {
+            let mut am: su_permission_group::ActiveModel = group.into();
+            am.change_by = Set(actor_id);
+            update_versioned(&txn, am, (su_permission_group::Column::Id, su_permission_group::Column::RowVersion), id, cmd.row_version).await?;
         }
         txn.commit().await?;
 

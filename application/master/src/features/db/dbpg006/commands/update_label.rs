@@ -36,6 +36,18 @@ impl Dbpg006CommandExecutor {
 
         info!("Updating label: category={category}, key={key}");
         let txn = self.db.begin().await?;
+        // Lock the entry's rows and check its version (the sum of the translations' versions): an
+        // entry saved since it was loaded must not be overwritten (lost update)
+        let rows = sea_orm::QuerySelect::lock_exclusive(
+            db_label::Entity::find()
+                .filter(db_label::Column::Category.eq(category.as_str()))
+                .filter(db_label::Column::Key.eq(key.as_str())),
+        )
+        .all(&txn)
+        .await?;
+        if rows.iter().map(|r| r.row_version).sum::<i64>() != cmd.row_version {
+            return Err(Dbpg006Error::VersionConflict);
+        }
         write_values(&txn, &category, &key, values, actor_id).await?;
         txn.commit().await?;
 

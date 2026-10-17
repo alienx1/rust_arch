@@ -70,6 +70,15 @@ When two users update the same row concurrently in Bangkok and Singapore:
    ```
    If another transaction incremented `row_version`, the query returns 0 rows updated, prompting the application to retry.
 
+   **How the code does it (one place):** every edit form sends back the `row_version` it loaded, and every update command saves through
+   `application_master::features::optimistic_update::update_versioned(&txn, active_model, (Entity::Column::Id, Entity::Column::RowVersion), id, cmd.row_version)`.
+   It issues the single conditional `UPDATE` above (the caller sets only the changed columns; it neither compares nor adds the version, and a `row_version` it sets is ignored).
+   No matching row ⇒ `DbErr::RecordNotUpdated`, which each feature's `From<DbErr>` turns into its `VersionConflict`, and the router answers **412 `VERSION_CONFLICT`**
+   ("Data has been modified by another transaction. Please reload and try again."). Because the check is the `WHERE` clause, two saves at the same moment cannot both win.
+   Write the main row first inside the transaction, so a conflict rolls back the child rows (labels, assignments) too.
+   Two saves are not single rows: the SUPG003 matrix is versioned by its group (`su_permission_group.row_version`, bumped only when the matrix changes), and a DBPG006 label entry by the sum of its translations' versions.
+   Updates that deliberately keep the version (images, contact group link, `must_change_password`) do not go through the helper, so an open form can still be saved.
+
 ---
 
 ## 3. Mathematical Collision Freedom: UUIDv7

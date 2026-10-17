@@ -29,6 +29,10 @@ pub enum Supg001Error {
 
 impl From<DbErr> for Supg001Error {
     fn from(err: DbErr) -> Self {
-        Supg001Error::Database(err.to_string())
+        match err {
+            // `update_versioned` found the row at another version (or gone): somebody saved first
+            DbErr::RecordNotUpdated => Supg001Error::VersionConflict,
+            other => Supg001Error::Database(other.to_string()),
+        }
     }
 }

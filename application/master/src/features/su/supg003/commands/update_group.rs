@@ -1,7 +1,9 @@
 //! SUPG003 update-group action: switches a group on / off under an optimistic lock.
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use sea_orm::{TransactionTrait, EntityTrait, Set};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use super::supg003_executor::Supg003CommandExecutor;
 use crate::features::su::supg003::errors::Supg003Error;
@@ -21,9 +23,6 @@ impl Supg003CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Supg003Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Supg003Error::VersionConflict);
-        }
         if existing.active && !cmd.active {
             if is_admin_group(&existing.code) {
                 return Err(Supg003Error::Validation("The ADMIN group cannot be switched off".to_string()));
@@ -36,13 +35,13 @@ impl Supg003CommandExecutor {
             }
         }
 
-        let next = existing.row_version + 1;
+        let _next = existing.row_version + 1;
+        let txn = self.db.begin().await?;
         let mut am: su_permission_group::ActiveModel = existing.into();
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next);
-
-        am.update(&self.db).await?;
+        update_versioned(&txn, am, (su_permission_group::Column::Id, su_permission_group::Column::RowVersion), id, cmd.row_version).await?;
+        txn.commit().await?;
 
         self.queries
             .get_group(id)

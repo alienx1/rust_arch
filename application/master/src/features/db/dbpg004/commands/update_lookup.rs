@@ -1,7 +1,9 @@
 //! DBPG004 command: update lookup labels and active flag with optimistic lock verification
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set, TransactionTrait};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use uuid::Uuid;
+
+use crate::features::optimistic_update::update_versioned;
 
 use crate::features::db::dbpg004::errors::Dbpg004Error;
 use crate::features::db::dbpg004::models::{
@@ -26,9 +28,6 @@ impl Dbpg004CommandExecutor {
             .one(&self.db)
             .await?
             .ok_or_else(|| Dbpg004Error::NotFound(id.to_string()))?;
-        if existing.row_version != cmd.row_version {
-            return Err(Dbpg004Error::VersionConflict);
-        }
         if is_protected_category(&existing.category) && existing.active && !cmd.active {
             return Err(Dbpg004Error::Validation(format!(
                 "'{}' is a system-protected value and cannot be deactivated",
@@ -41,8 +40,7 @@ impl Dbpg004CommandExecutor {
         let mut am: db_master_lookup::ActiveModel = existing.into();
         am.active = Set(cmd.active);
         am.change_by = Set(actor_id);
-        am.row_version = Set(next_version);
-        am.update(&txn).await?;
+        update_versioned(&txn, am, (db_master_lookup::Column::Id, db_master_lookup::Column::RowVersion), id, cmd.row_version).await?;
 
         upsert_label(&txn, id, THAI_LANGUAGE_ID, name_th, actor_id, next_version).await?;
         let name_en = cmd.name_en.trim().to_string();
