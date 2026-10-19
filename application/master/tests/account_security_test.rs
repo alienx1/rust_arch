@@ -318,3 +318,55 @@ fn test_mail_templates_from_configuration_replace_the_built_in_text() {
     let other = password_mail_message(PasswordMailKind::Setup, "a@b.c", "somchai", url, 24, &templates);
     assert!(other.subject.contains("Set your password"));
 }
+
+#[test]
+fn test_the_password_policy_names_every_rule_a_password_breaks() {
+    use application_master::features::su::account_security::{PasswordPolicy, PolicyViolation};
+
+    let strict = PasswordPolicy { min_length: 10, require_symbol: true, ..PasswordPolicy::default() };
+    assert_eq!(strict.violations("Str0ng!Passw0rd", "somchai", "somchai@arch.local"), vec![]);
+    assert_eq!(
+        strict.violations("abc", "somchai", "somchai@arch.local"),
+        vec![PolicyViolation::TooShort(10), PolicyViolation::NeedUppercase, PolicyViolation::NeedDigit, PolicyViolation::NeedSymbol]
+    );
+    // Upper / lower / digit / symbol are each switchable
+    let lax = PasswordPolicy { require_uppercase: false, require_lowercase: false, require_digit: false, require_symbol: false, forbid_identifier: false, ..PasswordPolicy::default() };
+    assert_eq!(lax.violations("12345678", "somchai", "x@y.z"), vec![]);
+    // The user name, or the e-mail name, inside the password (any case) is refused; short names are not
+    let p = PasswordPolicy::default();
+    assert_eq!(p.violations("MySomchai99x", "somchai", "other@arch.local"), vec![PolicyViolation::ContainsIdentifier]);
+    assert_eq!(p.violations("Xx-Other-123", "somchai", "other@arch.local"), vec![PolicyViolation::ContainsIdentifier]);
+    assert_eq!(p.violations("Abcdef12ab", "ab", "ab@x.y"), vec![], "a name under 3 characters is not checked");
+    // Length counts characters, not bytes
+    assert_eq!(p.violations("Aa1ก๑๒๓๔๕", "u", "u@x.y"), vec![], "8 characters, Thai included");
+}
+
+#[test]
+fn test_the_policy_is_read_from_configuration_and_kept_within_what_kratos_accepts() {
+    use application_master::features::su::account_security::PasswordPolicy;
+
+    let rows: HashMap<String, String> = [
+        ("security.password.min_length", "4"),
+        ("security.password.require_uppercase", "0"),
+        ("security.password.require_symbol", "true"),
+        ("security.password.require_digit", "maybe"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    let p = PasswordPolicy::from_rows(&rows);
+    assert_eq!(p.min_length, 8, "Kratos refuses anything shorter than 8, so the policy cannot go below it");
+    assert!(!p.require_uppercase && p.require_symbol);
+    assert!(p.require_digit && p.require_lowercase && p.forbid_identifier, "unreadable or missing = the default");
+    let long: HashMap<String, String> = [("security.password.min_length".to_string(), "9999".to_string())].into();
+    assert_eq!(PasswordPolicy::from_rows(&long).min_length, 128);
+    assert_eq!(PasswordPolicy::from_rows(&HashMap::new()), PasswordPolicy::default());
+}
+
+#[tokio::test]
+async fn test_check_password_answers_with_the_rules_or_nothing() {
+    let r = rig();
+    assert_eq!(r.exec.check_password("somchai", "somchai@arch.local", "Good-Pass-2026").await.unwrap(), None);
+    let text = r.exec.check_password("somchai", "somchai@arch.local", "weak").await.unwrap().expect("refused");
+    assert!(text.contains("8") && text.contains("นโยบาย") && text.contains("policy"), "{text}");
+}

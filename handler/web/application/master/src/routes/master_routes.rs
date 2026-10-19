@@ -5,6 +5,7 @@
 //! - `/` (`MasterLayout`)           → persistent sidebar + topbar, children render in `<Outlet/>`
 //!   - `/`                          → SYPG000 Dashboard
 //!   - `/su/supg005`                → SUPG005 IAM & Session Monitor
+//!   - `/su/supg006`                → SUPG006 Security & Mail Settings
 //!   - `/db/dbpg000`                → DBPG000 Organizations & Companies (list)
 //!   - `/db/dbpg001/org[/:id]`      → DBPG001 Organization form
 //!   - `/db/dbpg001/company[/:id]`  → DBPG001 Company form
@@ -45,7 +46,7 @@ use crate::layouts::MasterLayout;
 use crate::pages::{
     DashboardPage, Dbpg000Page, Dbpg001CompanyPage, Dbpg001OrgPage, Dbpg002BranchPage,
     Dbpg002DepartmentPage, Dbpg002Page, Dbpg003EmployeePage, Dbpg003Page, Dbpg004LookupPage, Dbpg004Page, Dbpg005FormPage, Dbpg005Page, Dbpg006LabelPage, Dbpg006Page, Supg001FormPage, Supg001Page, Supg002Page, Supg002ProgramPage, Supg003GroupPage, Supg003MatrixPage, Supg003Page, Supg004Page, Supg004UserPage, DemoPage,
-    Alpg000LogPage, Alpg000Page, Alpg001Page, MasterLoginPage, MasterSettingsPage, NotFoundPage, Ntpg000Page, Rppg000Page, Supg005Page,
+    Alpg000LogPage, Alpg000Page, Alpg001Page, MasterLoginPage, MasterSettingsPage, NotFoundPage, Ntpg000Page, Rppg000Page, Supg005Page, Supg006Page,
 };
 
 #[component]
@@ -57,6 +58,7 @@ pub fn MasterRoutes() -> impl IntoView {
             <ParentRoute path=path!("") view=MasterLayout>
                 <Route path=path!("") view=DashboardPage />
                 <Route path=path!("su/supg005") view=Supg005Page />
+                <Route path=path!("su/supg006") view=Supg006Page />
                 <Route path=path!("db/dbpg000") view=Dbpg000Page />
                 // DBPG001's menu entry opens the DBPG000 list; a catalogue row that still carries
                 // `/db/dbpg001` as its path shows it here (same URL, so the entry stays active)

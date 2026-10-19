@@ -12,6 +12,12 @@ FROM (VALUES
   ('security', 'security.login.lock_minutes', '15', 'Minutes an account stays locked after too many failed sign-ins'),
   ('mail', 'mail.smtp_url', '', 'SMTP server for password e-mails, e.g. smtp://host:1025, smtps://user:pass@host:465 or smtp://host:587?tls=required. Empty = no mail is sent (the admin gets the link instead)'),
   ('mail', 'mail.from', 'no-reply@arch.local', 'Sender of the e-mails, e.g. Arch Master <no-reply@arch.local>'),
+  ('security', 'security.password.min_length', '8', 'Shortest new password (Ory Kratos refuses anything under 8; at most 128)'),
+  ('security', 'security.password.require_uppercase', '1', 'A new password needs an uppercase letter (1 = yes, 0 = no)'),
+  ('security', 'security.password.require_lowercase', '1', 'A new password needs a lowercase letter (1 = yes, 0 = no)'),
+  ('security', 'security.password.require_digit', '1', 'A new password needs a digit (1 = yes, 0 = no)'),
+  ('security', 'security.password.require_symbol', '0', 'A new password needs a symbol such as ! @ # (1 = yes, 0 = no)'),
+  ('security', 'security.password.forbid_identifier', '1', 'A new password may not contain the user name or the e-mail name (1 = yes, 0 = no)'),
   ('security', 'security.password.mail_resend_minutes', '5', 'Least minutes between two password emails sent because the account tried to sign in while a password change is required')
 ) AS t(category, key, value, description)
 ON CONFLICT ("key") DO NOTHING;

@@ -9,6 +9,12 @@
 //! - counts an attempt Kratos answers with "credentials are invalid" (message `4000006`) as a
 //!   failure, and locks the account when that was one too many.
 //!
+//!
+//! It also checks the new password of the settings flow (`POST self-service/settings`, which the
+//! recovery link leads to) against the password policy (`security.password.*`, see
+//! `PasswordPolicy`): a password that breaks a rule is answered with the flow and the rules it
+//! breaks, and never reaches Kratos (which only knows a minimum length).
+//!
 //! The limits are `security.login.*` in `su_configuration`. Kratos itself cannot count failed
 //! sign-ins (its hooks run only after a success), hence the gateway. A reverse proxy in front of
 //! the app must send `/self-service/*` here as well (see `docs/guides/PRODUCTION_CHECKLIST.md`).
@@ -37,6 +43,8 @@ const MAX_BODY: usize = 256 * 1024;
 const MSG_INVALID_CREDENTIALS: u64 = 4000006;
 /// Our own message id for "locked"
 const MSG_LOCKED: u64 = 4010001;
+/// Our own message id for "the new password breaks the policy"
+const MSG_PASSWORD_POLICY: u64 = 4010003;
 
 /// State of the gateway when it runs without `AppConnection` (tests)
 #[derive(Clone)]
@@ -145,6 +153,92 @@ fn password_submit(headers: &HeaderMap, body: &[u8]) -> Option<String> {
     (method.as_deref() == Some("password") || has_password).then_some(identifier)
 }
 
+/// The new password of a password submit of the settings flow (JSON or form body)
+fn settings_password(headers: &HeaderMap, body: &[u8]) -> Option<String> {
+    let content_type = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let (password, method) = if content_type.contains("json") {
+        let v: serde_json::Value = serde_json::from_slice(body).ok()?;
+        (v["password"].as_str().map(str::to_string), v["method"].as_str().map(str::to_string))
+    } else {
+        let form: Vec<(String, String)> = serde_urlencoded::from_bytes(body).ok()?;
+        let get = |k: &str| form.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+        (get("password"), get("method"))
+    };
+    let password = password.filter(|p| !p.is_empty())?;
+    (method.as_deref().is_none() || method.as_deref() == Some("password")).then_some(password)
+}
+
+/// Adds the policy message to the settings flow: on the password field (what the form shows next
+/// to the input) and on the flow itself
+fn with_policy_message(mut flow: serde_json::Value, text: &str) -> serde_json::Value {
+    let message = serde_json::json!({ "id": MSG_PASSWORD_POLICY, "text": text, "type": "error" });
+    if let Some(ui) = flow.get_mut("ui").and_then(|u| u.as_object_mut()) {
+        if let Some(nodes) = ui.get_mut("nodes").and_then(|n| n.as_array_mut()) {
+            for node in nodes.iter_mut().filter(|n| n["attributes"]["name"] == "password") {
+                if let Some(obj) = node.as_object_mut() {
+                    let list = obj.entry("messages").or_insert_with(|| serde_json::json!([]));
+                    if let Some(list) = list.as_array_mut() {
+                        list.push(message.clone());
+                    }
+                }
+            }
+        }
+        let messages = ui.entry("messages").or_insert_with(|| serde_json::json!([]));
+        if let Some(list) = messages.as_array_mut() {
+            list.push(message);
+        }
+    }
+    flow
+}
+
+/// Checks the new password of a settings submit against the policy. `Some(answer)` = refuse with
+/// this answer, `None` = pass it on to Kratos.
+async fn settings_policy_answer(
+    target: &str,
+    query: &str,
+    headers: &HeaderMap,
+    password: &str,
+    security: &Arc<dyn AccountSecurityCommands>,
+) -> Option<Response> {
+    let flow_id = serde_urlencoded::from_str::<Vec<(String, String)>>(query)
+        .ok()
+        .and_then(|q| q.into_iter().find(|(k, _)| k == "flow").map(|(_, v)| v));
+    // The flow tells whose password it is (the policy forbids the user name inside it)
+    let mut fetched: Option<(serde_json::Value, reqwest::header::HeaderMap)> = None;
+    if let Some(id) = flow_id
+        && let Ok(res) = forward(target, &Method::GET, &format!("self-service/settings/flows?id={id}"), headers, Bytes::new()).await
+        && res.status().is_success()
+    {
+        let cookies = res.headers().clone();
+        if let Ok(flow) = res.json::<serde_json::Value>().await {
+            fetched = Some((flow, cookies));
+        }
+    }
+    let traits = |name: &str| {
+        fetched
+            .as_ref()
+            .and_then(|(f, _)| f["identity"]["traits"][name].as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    let (username, email) = (traits("username"), traits("email"));
+    match security.check_password(&username, &email, password).await {
+        Ok(None) => None,
+        Ok(Some(text)) => Some(match fetched {
+            Some((flow, cookies)) => json_response(StatusCode::BAD_REQUEST, &with_policy_message(flow, &text), Some(&cookies)),
+            None => json_response(
+                StatusCode::BAD_REQUEST,
+                &serde_json::json!({ "error": { "code": 400, "status": "Bad Request", "message": text } }),
+                None,
+            ),
+        }),
+        // A policy that cannot be read must not become a way to set any password
+        Err(e) => {
+            tracing::error!("password policy unavailable: {e}");
+            Some((StatusCode::SERVICE_UNAVAILABLE, "password policy temporarily unavailable").into_response())
+        }
+    }
+}
+
 /// Whether a Kratos flow JSON carries the "credentials are invalid" message
 fn has_invalid_credentials(flow: &serde_json::Value) -> bool {
     fn walk(v: &serde_json::Value) -> bool {
@@ -245,6 +339,14 @@ pub async fn gateway(
     let watched = (parts.method == Method::POST && path.trim_matches('/') == "self-service/login")
         .then(|| password_submit(&parts.headers, &body))
         .flatten();
+
+    if parts.method == Method::POST
+        && path.trim_matches('/') == "self-service/settings"
+        && let Some(password) = settings_password(&parts.headers, &body)
+        && let Some(refused) = settings_policy_answer(&target.0, &query, &parts.headers, &password, &security).await
+    {
+        return refused;
+    }
 
     if let Some(identifier) = &watched {
         match security.login_state(identifier).await {

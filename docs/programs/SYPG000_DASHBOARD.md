@@ -5,7 +5,6 @@ system_code: "SY"
 module_code: "SYMT"
 route_path: "/"
 icon: "DashboardOutlined"
-title_th: "ภาพรวมระบบ"
 title_en: "Dashboard"
 parent_group: null
 status: "Pending Scope"
@@ -16,79 +15,69 @@ tags:
   - screen
 ---
 
-# 📊 SYPG000 - ภาพรวมระบบ (Dashboard)
+# 📊 SYPG000 - Dashboard
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `SYPG000`
-> - **ชื่อภาษาไทย**: ภาพรวมระบบ
 > - **Title (EN)**: Dashboard
 > - **Route Path**: `/`
 > - **Icon**: `DashboardOutlined` (`icondata_ai`)
-> - **System**: `SY` (ระบบ / System)
-> - **Module**: `SYMT` (ระบบงานหลัก / System Core)
-> - **Parent Folder**: *(Root / ไม่มี Parent)*
+> - **System**: `SY` (System)
+> - **Module**: `SYMT` (System Core)
+> - **Parent Folder**: *(Root / No Parent)*
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000001`
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 1. ภาพรวมหน้าจอ (Screen Overview)
-หน้าจอหลัก (Home / Landing Page) สำหรับผู้ใช้งานที่ผ่านการยืนยันตัวตนแล้ว แสดงข้อมูลสรุปภาพรวมการทำงาน สถานะระบบ สถิติการใช้งาน และ Quick Actions ต่างๆ ตามสิทธิ์ที่ผู้ใช้ได้รับ
+## 🎯 1. Screen Overview
+Primary landing page (Home / Dashboard) for authenticated users, displaying platform KPI summaries, system status, usage statistics, and quick navigation shortcuts tailored to the user's permissions and View Scope.
 
 ---
 
-## 📝 2. ขอบเขตและข้อกำหนดการทำงาน (Scope & Requirements)
-<!-- 
-  ส่วนนี้เปิดไว้สำหรับระบุ Scope ละเอียดของหน้าจอ:
-  สามารถเขียน Requirement, Business Logic, หรือ Wireframe ที่ต้องการได้ที่นี่
--->
+## 📝 2. Scope & Requirements
 
-### 2.1 วัตถุประสงค์ (Objectives)
-- *[ระบุวัตถุประสงค์ เช่น ให้ผู้บริหารดูสถิติภาพรวม, แจ้งเตือนงานค้าง]*
+### 2.1 Objectives
+- Provide executives and operators with an at-a-glance overview of master data counts, security posture, and quick links to frequently used programs.
 
-### 2.2 วิดเจ็ตและการแสดงผล (Widgets & Metrics)
-- [ ] **KPI Summary Cards**:
-  - จำนวนผู้ใช้งานทั้งหมด (Total Users)
-  - จำนวนองค์กร/สาขา (Active Organizations / Branches)
-  - จำนวน Audit Events วันนี้ (Today Audit Logs)
-- [ ] **Quick Action Links**:
-  - ทางลัดไปยังหน้าจอที่ใช้งานบ่อย เช่น [[DBPG001_ORGANIZATIONS|กำหนดองค์กร]], [[SUPG004_USER_ACCOUNTS|จัดการผู้ใช้]]
-- [ ] **System Status / Health Feed**:
-  - สถานะการเชื่อมต่อ Service (PostgreSQL, Valkey, Redpanda, Quickwit)
+### 2.2 Widgets & Metrics
+- [x] **KPI Summary Cards**:
+  - Total User Accounts (`su_user`)
+  - Active Organizations, Companies, Branches, and Departments
+  - Total Employees and Reference Data counts
+- [x] **Quick Action Links**:
+  - Direct shortcuts to frequently used screens such as [[DBPG001_ORGANIZATIONS|Organizations & Companies]] and [[SUPG004_USER_ACCOUNTS|User Accounts]]
+- [x] **System Status / Health Feed**:
+  - Service connectivity and platform health indicators
 
-### 2.3 การกรองข้อมูลตามสิทธิ์ (ABAC / Data Scoping)
-- ผู้ใช้มองเห็นข้อมูลเฉพาะใน Scope องค์กร/สาขา (`company_id`, `branch_id`, `department_id`) ที่ตนเองได้รับมอบหมาย
+### 2.3 ABAC / Data Scoping
+- Users see organization/company/branch/department/employee counts filtered by their active `ViewScope` (`company_id`, `branch_id`, `department_id` — see [[12_VIEW_SCOPE_COMPANY_SWITCHER]]).
 
 ---
 
-## 🔒 3. สิทธิ์การเข้าใช้งาน (Permissions & Security)
-- API `/dashboard/...` อยู่หลัง Ory Kratos session และตรวจสิทธิ์ด้วย `routers/access.rs::require()` กับโปรแกรม `SYPG000` (ทุก `GET` ต้องมี `READ`)
-- **สิทธิ์ที่กำหนดในระบบ (`su_permission`)**:
-  - `READ`: เข้าชมหน้าจอ Dashboard และดูตัวชี้วัด (`GET /dashboard/summary`)
-  - `WRITE`: ปรับแต่ง Layout หรือบันทึกการตั้งค่าวิดเจ็ตส่วนตัว
-  - `APPROVE`: *(ถ้ามี)*
-- **Authentication**: ต้องผ่านการ Login และมี Session ที่ถูกต้องจาก Ory Kratos
+## 🔒 3. Permissions & Security
+- The `/api/v1/dashboard/...` endpoints sit behind Ory Kratos session authentication and enforce permissions via `routers/access.rs::require()` for program `SYPG000` (all `GET` requests require `READ`).
+- **Permissions defined in `su_permission`**:
+  - `READ`: View the Dashboard screen and fetch summary metrics (`GET /api/v1/dashboard/summary`)
+  - `WRITE`: Customize layout or personal widget preferences *(if applicable)*
+  - `APPROVE`: *(N/A)*
+- **Authentication**: Requires a valid Ory Kratos session.
 
 ---
 
-## 🗄️ 4. ตารางฐานข้อมูลที่เกี่ยวข้อง (Database Entities)
-- ตารางสรุปข้อมูล:
-  - `su_user` - ข้อมูลผู้ใช้งาน
-  - `db_organization`, `db_branch` - โครงสร้างองค์กร
-  - `su_configuration` - คอนฟิกค่าระบบ
-- ตรวจสอบประวัติ:
-  - Quickwit OpenSearch API (Querying audit log index)
+## 🗄️ 4. Database Entities
+- Summary count sources:
+  - `su_user` — User accounts
+  - `db_organization`, `db_company`, `db_branch`, `db_department`, `db_employee` — Organizational hierarchy
+  - `su_configuration` — System configuration settings
 
 ---
 
 ## 💻 5. Clean Architecture Implementation
 - **Frontend (Leptos WebAssembly)**:
-  - Component: `handler/web/application/master/src/screens/dashboard/`
-  - UI Library: `shadcn/ui` (Cards, Charts, Metric badges)
+  - Page: `handler/web/application/master/src/pages/dashboard/`
 - **Backend API (Axum 0.8)**:
-  - Handler: `handler/api/master/src/handlers/dashboard.rs`
-  - Route: `GET /api/v1/system/dashboard/summary`
+  - Router: `handler/api/master/src/routers/dashboard_router.rs`
+  - Endpoint: `GET /api/v1/dashboard/summary`
 - **Application Layer**:
-  - Use Case: `application/master/src/usecases/dashboard/get_metrics.rs`
-- **Domain Layer**:
-  - Entity: `domain/src/entity/system/dashboard.rs`
+  - Feature: `application/master/src/features/dashboard/`

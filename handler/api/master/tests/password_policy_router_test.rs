@@ -249,6 +249,8 @@ async fn test_the_hook_finds_the_account_by_user_name_when_the_email_no_longer_m
 struct FakeKratos {
     /// Password submits that reached Kratos
     submits: Arc<AtomicUsize>,
+    /// Settings (new password) submits that reached Kratos
+    settings_submits: Arc<AtomicUsize>,
 }
 
 fn flow(messages: serde_json::Value) -> serde_json::Value {
@@ -291,6 +293,30 @@ async fn fake_kratos() -> (String, FakeKratos) {
                         } else {
                             (StatusCode::BAD_REQUEST, Json(flow(serde_json::json!([{ "id": 4000006, "type": "error", "text": "The provided credentials are invalid" }])))).into_response()
                         }
+                    }
+                }
+            }),
+        )
+        .route(
+            "/self-service/settings/flows",
+            get(|| async {
+                Json(serde_json::json!({
+                    "id": "s1", "type": "browser",
+                    "identity": { "traits": { "username": "somchai", "email": "somchai@arch.local" } },
+                    "ui": { "action": "/self-service/settings?flow=s1", "method": "POST", "messages": [],
+                            "nodes": [{ "type": "input", "group": "password", "attributes": { "name": "password", "type": "password" }, "messages": [] }] }
+                }))
+            }),
+        )
+        .route(
+            "/self-service/settings",
+            post({
+                let state = state.clone();
+                move || {
+                    let state = state.clone();
+                    async move {
+                        state.settings_submits.fetch_add(1, Ordering::SeqCst);
+                        Json(serde_json::json!({ "state": "success" }))
                     }
                 }
             }),
@@ -442,4 +468,61 @@ async fn test_a_submit_that_is_not_a_password_attempt_is_not_counted() {
         app.clone().oneshot(other()).await.unwrap();
     }
     assert_eq!(kratos.submits.load(Ordering::SeqCst), 8, "all of them were forwarded, none locked");
+}
+
+fn settings_submit(password: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/self-service/settings?flow=s1")
+        .header("content-type", "application/json")
+        .header("cookie", "ory_kratos_session=s")
+        .body(Body::from(serde_json::json!({ "method": "password", "password": password, "csrf_token": "abc" }).to_string()))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_a_new_password_that_breaks_the_policy_never_reaches_kratos() {
+    let (app, kratos) = gateway(&security()).await;
+    for weak in ["short1A", "alllowercase123", "NOLOWERCASE123", "NoDigitsHere", "xxSomchaixx1A"] {
+        let resp = app.clone().oneshot(settings_submit(weak)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{weak}");
+        let body: serde_json::Value = serde_json::from_str(&text(resp).await).unwrap();
+        // The flow comes back, with the rules on the password field and on the flow
+        let field = &body["ui"]["nodes"][0]["messages"][0];
+        assert_eq!(field["id"], 4010003, "{weak}");
+        assert!(field["text"].as_str().unwrap().contains("policy"), "{weak}");
+        assert_eq!(body["ui"]["messages"][0]["id"], 4010003);
+    }
+    assert_eq!(kratos.settings_submits.load(Ordering::SeqCst), 0, "none of them was sent to Kratos");
+}
+
+#[tokio::test]
+async fn test_the_message_names_what_is_missing() {
+    let (app, _) = gateway(&security()).await;
+    let resp = app.oneshot(settings_submit("abc")).await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&text(resp).await).unwrap();
+    let message = body["ui"]["messages"][0]["text"].as_str().unwrap().to_string();
+    assert!(message.contains("อย่างน้อย 8") && message.contains("uppercase") && message.contains("digit"), "{message}");
+}
+
+#[tokio::test]
+async fn test_a_password_that_fits_the_policy_is_passed_on() {
+    let (app, kratos) = gateway(&security()).await;
+    let resp = app.oneshot(settings_submit("Good-Pass-2026")).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(kratos.settings_submits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn test_a_settings_submit_that_is_not_a_password_is_not_checked() {
+    // Changing the profile (name, e-mail) has no password in it
+    let (app, kratos) = gateway(&security()).await;
+    let req = Request::builder()
+        .method("POST")
+        .uri("/self-service/settings?flow=s1")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"method":"profile","traits.name.first":"x"}"#))
+        .unwrap();
+    assert_eq!(app.oneshot(req).await.unwrap().status(), StatusCode::OK);
+    assert_eq!(kratos.settings_submits.load(Ordering::SeqCst), 1);
 }

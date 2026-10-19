@@ -1,58 +1,56 @@
-# 12 — ขอบเขตการมองเห็นข้อมูล (View Scope) และ dropdown เลือกบริษัท/สาขา
+# 12 — Data Visibility Scope (View Scope) and Company / Branch Switcher
 
-ผู้ใช้เห็นข้อมูลโครงสร้างองค์กรได้แค่ไหน ขึ้นกับ**สาขาที่พนักงานของบัญชีนั้นสังกัด**
+How much organizational data a user can see depends on **the branch to which the account's employee belongs** and **the permission group assignments granted to the account** (`su_user_assignment`) — allowing a single user to access **multiple branches** even though their employee record belongs to a single home branch.
 
-ผู้ใช้เห็นข้อมูลโครงสร้างองค์กรได้แค่ไหน ขึ้นกับ **สาขาที่พนักงานของบัญชีนั้นสังกัด** และ **กลุ่มสิทธิ์ที่ถูกกำหนดให้** (`su_user_assignment`) — ผู้ใช้ 1 คนจึงเข้าถึงได้**หลายสาขา** แม้ทะเบียนพนักงานจะอยู่สาขาเดียว
-
-| บัญชี | เห็นอะไร | dropdown |
+| Account | What They See | Switcher Dropdown |
 |---|---|---|
-| สังกัดสาขา **HQ** (`db_branch.code = 'HQ'`) หรือมีกลุ่มสิทธิ์กำหนดที่ **ระดับองค์กร** | ทั้งองค์กร (หรือบริษัท/สาขาที่เลือก) | เลือกได้ทุกบริษัท/สาขา + "ทุกบริษัท" / "ทุกสาขา" |
-| อื่นๆ | **สาขาตัวเอง** + สิ่งที่กลุ่มสิทธิ์ครอบคลุม (ดูข้างล่าง) | เลือกได้เฉพาะที่เข้าถึง; ถ้ามีตัวเลือกเดียวจะล็อก |
+| Belongs to the **HQ** branch (`db_branch.code = 'HQ'`) or holds a permission group assigned at the **Organization level** | Entire organization (or the selected company/branch) | Can select any company/branch + "All Companies" / "All Branches" |
+| Other accounts | **Own home branch** + everything covered by assigned permission groups (see below) | Can select only accessible companies/branches; locked if only one option is available |
 
-กลุ่มสิทธิ์ (ที่เปิดใช้งานอยู่) ที่บัญชีถือ ขยายสิ่งที่เห็นดังนี้ (หลายรายการรวมกัน):
+Active permission groups held by the account expand visibility as follows (multiple assignments combine as a union):
 
-| กำหนดที่ระดับ | เห็นเพิ่ม |
+| Assigned Scope Level | Additional Visibility |
 |---|---|
-| องค์กร | ทั้งองค์กร (เหมือน HQ) |
-| บริษัท | ทุกสาขาของบริษัทนั้น (ทั้งสาขา) |
-| สาขา | สาขานั้น (ทั้งสาขา) |
-| แผนก | **เฉพาะแผนกนั้น** — แถวของสาขาที่แผนกอยู่จะแสดง แต่แผนกอื่น/พนักงานอื่นในสาขานั้นไม่แสดง |
+| Organization | Entire organization (same as HQ) |
+| Company | Every branch within that company (full branch access) |
+| Branch | That specific branch (full branch access) |
+| Department | **Only that department** — the parent branch row is visible, but other departments and employees in that branch are hidden |
 
-บัญชีที่หาพนักงานไม่เจอ (ไม่มีในระบบ/ถูกปิด) ไม่ถูกจำกัด — ยังคงต้องผ่านสิทธิ์ของแต่ละโปรแกรมตามปกติ
+Accounts without a linked employee record (none linked or employee deactivated) are not restricted by view scope — they are still governed by normal per-program permissions.
 
-> ขอบเขตนี้ **เพิ่มจาก** สิทธิ์รายโปรแกรม (SUPG003/004) ไม่ได้แทนที่: ต้องมีสิทธิ์เปิดหน้านั้นก่อน แล้วข้อมูลในหน้าจึงถูกกรองตามสาขา
+> View scope is **additive to** per-program permissions (`SUPG003`/`SUPG004`), not a replacement: the user must first have permission to open the screen, and the data within that screen is then filtered by branch scope.
 
-## ทำงานอย่างไร
+## How It Works
 
-1. **เว็บ** — `CompanySwitcher` ที่ sidebar ใต้ชื่อองค์กร มี 2 dropdown: บริษัท แล้วสาขา (ตัวเลือกสาขาตามบริษัทที่เลือก; เปลี่ยนบริษัทจะล้างสาขา) เก็บใน `localStorage` (`company_id`, `branch_id`) แล้วโหลดหน้าใหม่ ทุก request ส่ง header `X-Company-Id` / `X-Branch-Id` (`web_package::core::company_scope`)
-2. **middleware** `handler/api/master/src/view_scope_layer.rs` (อยู่หลัง session ของ Kratos) หา `Viewer` ของบัญชี (`AccessControl::viewer`: องค์กร/บริษัท/สาขา + เป็น HQ ไหม; แคชใน Valkey `acl` 60 วินาที) แล้วคำนวณ `ViewScope` ด้วย `view_scope_for`:
-   - HQ: `company_id = X-Company-Id` และ/หรือ `branch_id = X-Branch-Id` (ต้องอยู่ในองค์กรเดียวกัน ไม่งั้นถือว่าไม่ได้เลือก); ถ้าเลือกสาขา **สาขาเป็นตัวกำหนดบริษัท** (บริษัทที่ส่งมาไม่ตรงจะถูกแทนด้วยบริษัทของสาขานั้น); ไม่เลือกสาขา = ทุกสาขา
-   - อื่นๆ: สาขาที่เข้าถึงได้ทั้งหมด (`ViewScope` = รายการบริษัท + สาขาแบบทั้งสาขา + สาขาแบบบางส่วน/แผนกที่ได้รับ) การเลือกใน dropdown **ลดขอบเขต**ได้เฉพาะในสิ่งที่เข้าถึง ส่งอะไรนอกขอบเขตมาถูกมองข้าม
-   - ค้นหา viewer ล้มเหลว → ตอบ 503 (**ไม่เคย**ปล่อยให้เห็นทั้งหมดเมื่อ error)
-3. `ViewScope` ถูกวางเป็น task-local (`application_core::view_scope`, แบบเดียวกับภาษาของ request) — query ที่ต้องกรองเรียก `view_scope_filters::{by_company, by_branch, in_scope}` (`application/master/src/features/db/view_scope_filters.rs`)
-4. แคช `org` และ `dashboard` ของ Valkey เก็บแยกตาม scope (`ReadCache` ใส่ `view_scope::signature()` ใน key) — คำตอบที่ถูกกรองต่างกันไม่ใช้ร่วมกัน
+1. **Web UI** — `CompanySwitcher` in the sidebar under the organization name renders two dropdowns: Company and Branch (branch options follow the selected company; changing company clears the branch selection). Selections are stored in `localStorage` (`company_id`, `branch_id`) and trigger a page reload. Every API request sends `X-Company-Id` / `X-Branch-Id` headers (`web_package::core::company_scope`).
+2. **Middleware** — `handler/api/master/src/view_scope_layer.rs` (running after the Kratos session middleware) resolves the account's `Viewer` (`AccessControl::viewer`: organization/company/branch + whether HQ; cached in Valkey `acl` for 60 seconds) and computes `ViewScope` via `view_scope_for`:
+   - **HQ**: `company_id = X-Company-Id` and/or `branch_id = X-Branch-Id` (must belong to the same organization, otherwise treated as unselected). If a branch is selected, **the branch determines the company** (a mismatched company header is overridden by the branch's company); no branch selected = all branches.
+   - **Non-HQ**: All accessible branches (`ViewScope` = list of companies + full-access branches + partial branches/departments). Dropdown selections can **narrow** the scope only within what the user already has access to; out-of-scope IDs sent in headers are ignored.
+   - **Viewer lookup failure** → returns HTTP 503 (**never** fails open to full visibility on error).
+3. `ViewScope` is stored in a task-local (`application_core::view_scope`, similar to request language) — filtered queries call `view_scope_filters::{by_company, by_branch, in_scope}` (`application/master/src/features/db/view_scope_filters.rs`).
+4. Valkey `org` and `dashboard` caches are partitioned by scope (`ReadCache` includes `view_scope::signature()` in the cache key) — differently scoped responses never share cache entries.
 
-`GET /api/v1/access/me` ตอบเพิ่ม: `is_hq`, `companies` / `branches` (ตัวเลือกใน dropdown: HQ ทั้งองค์กร, สาขาอื่นเฉพาะของตัวเอง), `selected_company_id` / `selected_branch_id` (ที่ server จำกัดให้ `null` = ทั้งหมด) เว็บใช้แสดง dropdown และบรรทัดบริษัทใต้ชื่อองค์กรที่ sidebar
+`GET /api/v1/access/me` also returns: `is_hq`, `companies` / `branches` (dropdown options: entire organization for HQ, accessible items only for others), and `selected_company_id` / `selected_branch_id` (clamped by the server; `null` = all). The web UI uses these fields to render the switcher dropdowns and the company subtitle beneath the organization name in the sidebar.
 
-## สิทธิ์ของแต่ละหน้าจอผูกกับสาขาที่ถือสิทธิ์นั้น
+## Per-Screen Permissions Are Bound to the Branches Granting That Screen
 
-ผู้ใช้อาจถือหลายกลุ่มสิทธิ์ในหลายสาขา และแต่ละกลุ่มเปิดโปรแกรมไม่เท่ากัน (เช่น `ABAC_TEST_DEPT` @ HQ ไม่มี dashboard ส่วน `ABAC_TEST_DEPT_X` @ B001 มี) ดังนั้นสำหรับหน้าจอ (GET ของโปรแกรมหนึ่ง) middleware ใช้เฉพาะ**กลุ่มที่เปิด READ ของโปรแกรมนั้น** (`AccessControl::granting_groups`) ในการหาขอบเขต:
+A user may hold multiple permission groups across different branches where each group grants different programs (for example, `ABAC_TEST_DEPT` @ HQ has no Dashboard access, while `ABAC_TEST_DEPT_X` @ B001 does). Therefore, when loading a screen (`GET` on a specific program), the middleware computes the scope using **only the groups that grant `READ` on that program** (`AccessControl::granting_groups`):
 
-- ข้อมูลของหน้านั้นมาจากสาขาที่กลุ่มเหล่านั้นครอบคลุมเท่านั้น (สาขาที่สังกัดแต่ไม่มีสิทธิ์โปรแกรมนั้นไม่นับ) — ใช้กับ HQ ด้วย เว้นแต่ถือกลุ่มที่กำหนดที่ระดับองค์กร (ยังเห็นทั้งองค์กร)
-- ถ้าเลือกสาขา/บริษัทใน dropdown ที่อยู่นอกขอบเขตนี้ → **403** `FORBIDDEN` (ไม่ใช่มองข้ามเงียบๆ) เช่น สลับไปสาขาหลักที่ไม่มี dashboard แล้วเปิด dashboard ไม่ได้ ส่วนหน้าอื่นที่สาขานั้นมีสิทธิ์ยังเปิดได้
-- เส้นทางที่ไม่มีโปรแกรม (`/access/me`, เมนู, แจ้งเตือน) และการเขียน (POST/PUT/DELETE) ไม่ถูกตัดตามกลุ่ม — การเขียนยังตรวจด้วยขอบเขตสิทธิ์กลุ่มเดิม (`require_unit`)
-- โปรแกรมที่หน้าเปิดผ่านโปรแกรมอื่น (เช่นรายการองค์กรที่ `/db/dbpg000` แต่เมนูเป็น DBPG001) ไม่มีกลุ่มของตัวเองที่ path นั้น → ไม่ตัดตามกลุ่ม แล้วให้ `require_any` ตัดสินสิทธิ์ตามเดิม
-- เมนูใน sidebar ยังแสดงโปรแกรมที่ผู้ใช้มีสิทธิ์ในสาขาใดสาขาหนึ่ง (ไม่ซ่อนตามสาขาที่เลือก) หน้าที่ไม่มีสิทธิ์ในสาขาที่เลือกจะตอบ 403
+- Data on that screen comes only from branches covered by those granting groups (a home branch without permission for that program is excluded) — this also applies to HQ users, unless they hold an organization-level assignment for that program (which still sees the entire organization).
+- If the user selects a branch/company in the dropdown that falls outside the granting scope for that screen → returns **HTTP 403 `FORBIDDEN`** (rather than silently ignoring the selection). For example, switching to a branch that lacks Dashboard permission blocks the Dashboard with 403 while other screens permitted at that branch continue to work.
+- Program-agnostic routes (`/access/me`, sidebar menu, notifications) and write requests (`POST`/`PUT`/`DELETE`) are not narrowed by granting group — writes continue to be enforced by `require_unit` against the target entity's scope.
+- Screens accessed via another program's menu entry (e.g. organization list at `/db/dbpg000` opened from menu `DBPG001`) have no direct group grant on that path → not narrowed by group, and `require_any` authorizes access as usual.
+- The sidebar menu continues to show any program the user can access in at least one branch (it does not hide menu items when switching branches); opening a screen not permitted in the currently selected branch returns 403.
 
-## หน้าที่ถูกกรอง
+## Filtered Screens
 
-DBPG000 (รายการบริษัท + KPI) · DBPG002 (สาขา แผนก ตัวเลือกบริษัท + KPI) · DBPG003 (พนักงาน ตัวเลือกบริษัท/สาขา/แผนก + KPI) · แดชบอร์ด (จำนวนบริษัท/สาขา/แผนก/พนักงาน) — รวมการเปิดด้วย id (นอกขอบเขต = 404)
+`DBPG000` (company list + KPIs) · `DBPG002` (branches, departments, company options + KPIs) · `DBPG003` (employees, company/branch/department options + KPIs) · Dashboard (company/branch/department/employee counts) — including direct lookup by ID (out of scope = 404).
 
-## ที่ยังไม่กรอง / ข้อจำกัด
+## Unfiltered Areas & Limitations
 
-- การเขียน (สร้าง/แก้/ลบ) ยังใช้ขอบเขตสิทธิ์ของกลุ่ม (scope ใน SUPG003/004) ตามเดิม ไม่ได้ผูกกับ view scope
-- รายการองค์กร (DBPG000 org), หน้า SUPG (ผู้ใช้/กลุ่ม/สิทธิ์) และข้อมูลอ้างอิง/ภูมิศาสตร์ไม่ถูกกรอง
-- "HQ" ตัดสินจากรหัสสาขา `HQ` (`HQ_BRANCH_CODE`) ไม่มีคอลัมน์แยก
-- การสลับบริษัทใช้การโหลดหน้าใหม่ (state ที่ยังไม่บันทึกหาย)
-- กลุ่มสิทธิ์ที่กำหนดไว้ถูกอ่านผ่านแคช `acl` 60 วินาที การเพิ่ม/เปลี่ยนการกำหนดสิทธิ์ของผู้ใช้จึงมีผลทันที (เขียนผ่าน SUPG004 ล้างแคชนี้) แต่การย้ายสาขาของพนักงานมีผลภายใน 60 วินาที
-- รหัสบริษัทที่ `localStorage` ค้างอยู่แต่ใช้ไม่ได้แล้ว server จะมองข้าม (เป็นภาพรวม)
+- Write operations (create/update/delete) still enforce permission group scopes (`SUPG003`/`SUPG004` via `require_unit`) directly rather than `ViewScope`.
+- Organization list (`DBPG000` organizations), `SUPG` screens (users/groups/permissions), and reference/geography data are not filtered by view scope.
+- "HQ" is determined by branch code `HQ` (`HQ_BRANCH_CODE`); there is no separate boolean column.
+- Switching company/branch reloads the page (unsaved form state is discarded).
+- Assigned permission groups are read through the 60-second `acl` cache: updating user assignments in `SUPG004` flushes the cache immediately, whereas transferring an employee to a different branch takes effect within 60 seconds.
+- A stale `company_id` or `branch_id` left in `localStorage` that is no longer valid is ignored by the server (falling back to the overview).

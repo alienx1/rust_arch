@@ -35,6 +35,13 @@ pub trait AccountSecurityCommands: Send + Sync {
         identifier.to_string()
     }
 
+    /// Checks a new password against the password policy (`security.password.*`). `None` = fine,
+    /// otherwise the text of the rules it breaks (Thai / English). The default accepts everything
+    /// (test doubles).
+    async fn check_password(&self, _username: &str, _email: &str, _password: &str) -> Result<Option<String>, AccountSecurityError> {
+        Ok(None)
+    }
+
     /// The account must set a new password before it may sign in
     async fn password_change_required(&self, identifier: &str) -> Result<bool, AccountSecurityError>;
 

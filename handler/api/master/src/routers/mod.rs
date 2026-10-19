@@ -21,6 +21,7 @@ pub mod localization_router;
 pub mod supg001_router;
 pub mod supg002_router;
 pub mod supg003_router;
+pub mod supg006_router;
 pub mod supg004_router;
 pub mod supg005_router;
 
@@ -79,6 +80,9 @@ pub use supg001_router::{
 pub use supg002_router::{
     SUPG002_PATH, Supg002ApiError, Supg002ErrorResponse, Supg002State, get_menu_handler,
     supg002_routes, supg002_routes_with_state, username_of,
+};
+pub use supg006_router::{
+    SUPG006_PATH, Supg006ApiError, Supg006ErrorResponse, Supg006State, supg006_routes, supg006_routes_with_state,
 };
 pub use supg003_router::{
     SUPG003_PATH, Supg003ApiError, Supg003ErrorResponse, Supg003State, supg003_routes,

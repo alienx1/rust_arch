@@ -5,7 +5,6 @@ system_code: "SU"
 module_code: "SUMT"
 route_path: "/su/supg005"
 icon: "SafetyCertificateOutlined"
-title_th: "สถานะเซสชัน (IAM)"
 title_en: "IAM & Session Monitor"
 parent_group: "SUPG000"
 status: "Implemented"
@@ -18,40 +17,39 @@ tags:
   - screen
 ---
 
-# 🛡️ SUPG005 - สถานะเซสชัน (IAM & Session Monitor)
+# 🛡️ SUPG005 - IAM & Session Monitor
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `SUPG005`
-> - **ชื่อภาษาไทย**: สถานะเซสชัน (IAM)
 > - **Title (EN)**: IAM & Session Monitor
 > - **Route Path**: `/su/supg005`
 > - **API Base**: `/api/v1/su/supg005`
 > - **Icon**: `SafetyCertificateOutlined`
 > - **System**: `SU` | **Module**: `SUMT` | **Parent Folder**: `SUPG000`
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000025` (seed: `sql/52_program_catalogue.sql`)
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 ภาพรวมหน้าจอ
-แสดงตัวตนและเซสชันของผู้ใช้ปัจจุบัน (Ory Kratos), ขอบเขตข้อมูล, สิทธิ์ตามโปรแกรม, อุปกรณ์ที่ล็อกอินอยู่ และตารางผู้ใช้งานทั้งระบบพร้อมการระงับ/เปิดใช้งานบัญชีและเพิกถอนเซสชัน
+## 🎯 Screen Overview
+Displays the current user's identity and session details (Ory Kratos), data visibility scope, per-program permissions, active signed-in devices, and a system-wide user session table enabling administrators to suspend/reactivate accounts, force password changes, and revoke active sessions.
 
-> [!NOTE] ความสัมพันธ์กับ SUPG004
-> `SUPG004` (กำหนดผู้ใช้งาน) คือหน้าสร้าง/แก้ไขบัญชีและมอบหมายกลุ่มสิทธิ์ ส่วน `SUPG005` คือหน้าเฝ้าดูสถานะและสั่งงานเซสชันที่มีอยู่แล้ว (เดิมคือ `/iam/session`)
+> [!NOTE] Relationship to SUPG004
+> `SUPG004` (User Accounts) handles creating/editing user accounts and assigning permission groups, whereas `SUPG005` monitors live session state and executes runtime session/account actions.
 
-## 🔌 API (ต้องมี Kratos session, ล้มเหลวแบบ fail-closed 503 ถ้าไม่ได้ตั้งค่า Kratos)
-| Method | Path | หน้าที่ |
+## 🔌 API (Requires Kratos Session; Fails Closed with 503 if Kratos Is Unconfigured)
+| Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/su/supg005/users?page=&limit=` | รายชื่อผู้ใช้พร้อมอุปกรณ์/เซสชัน |
-| DELETE | `/api/v1/su/supg005/users/{id}/sessions` | เพิกถอนทุกเซสชันของผู้ใช้ |
-| POST | `/api/v1/su/supg005/users/{id}/suspend` | ระงับบัญชี (ปิดที่ Kratos + เพิกถอนเซสชัน) |
-| POST | `/api/v1/su/supg005/users/{id}/reactivate` | ยกเลิกการระงับ |
-| DELETE | `/api/v1/su/supg005/sessions/{id}` | เพิกถอนเซสชันอุปกรณ์เดียว |
+| `GET` | `/api/v1/su/supg005/users?page=&limit=` | List users along with their active devices and sessions |
+| `DELETE` | `/api/v1/su/supg005/users/{id}/sessions` | Revoke all active sessions for a user |
+| `POST` | `/api/v1/su/supg005/users/{id}/suspend` | Suspend user account (disables identity in Kratos + revokes sessions) |
+| `POST` | `/api/v1/su/supg005/users/{id}/reactivate` | Reactivate a suspended user account |
+| `DELETE` | `/api/v1/su/supg005/sessions/{id}` | Revoke a single device session |
 
-Kratos after-login hook `/api/v1/hooks/login-guard` ไม่ใช่โปรแกรม: เรียกโดย Kratos (ตรวจ `X-Webhook-Secret`) จึงคง path เดิมตามที่อ้างใน Kratos config ใช้ `Supg005Commands::authorize_login` ร่วมกัน
+The Kratos after-login webhook `/api/v1/hooks/login-guard` is not a user-facing program: it is invoked directly by Kratos (authenticated via `X-Webhook-Secret`), retains its dedicated path referenced in Kratos config, and shares `Supg005Commands::authorize_login`.
 
 ## 💻 Clean Architecture Implementation
 - **Frontend**: [`pages/su/supg005/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/su/supg005/) (`Supg005Page`)
-- **Router**: [`supg005_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/supg005_router.rs), hook: [`kratos_hook_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/kratos_hook_router.rs)
+- **Router**: [`supg005_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/supg005_router.rs), webhook: [`kratos_hook_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/kratos_hook_router.rs)
 - **Application**: [`features/su/supg005/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/application/master/src/features/su/supg005/)
 - **Tests**: `application/master/tests/supg005_test.rs`, `handler/api/master/tests/supg005_router_test.rs`

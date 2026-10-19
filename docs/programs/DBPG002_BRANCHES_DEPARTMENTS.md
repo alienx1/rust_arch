@@ -5,7 +5,6 @@ system_code: "DB"
 module_code: "DBMT"
 route_path: "/db/dbpg002"
 icon: "BankOutlined"
-title_th: "กำหนดสาขา / แผนก"
 title_en: "Branches & Departments"
 parent_group: "DBPG000"
 status: "Implemented"
@@ -17,85 +16,78 @@ tags:
   - screen
 ---
 
-# 🏛️ DBPG002 - กำหนดสาขา / แผนก (Branches & Departments)
+# 🏛️ DBPG002 - Branches & Departments
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `DBPG002`
-> - **ชื่อภาษาไทย**: กำหนดสาขา / แผนก
 > - **Title (EN)**: Branches & Departments
 > - **Route Path**: `/db/dbpg002`
 > - **Icon**: `BankOutlined` (`icondata_ai`)
-> - **System**: `DB` (ฐานข้อมูล / Database)
-> - **Module**: `DBMT` (ข้อมูลหลัก / Master Data)
-> - **Parent Folder**: `DBPG000` (ข้อมูลหลัก / Master Data)
+> - **System**: `DB` (Database)
+> - **Module**: `DBMT` (Master Data)
+> - **Parent Folder**: `DBPG000` (Master Data)
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000012`
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 1. ภาพรวมหน้าจอ (Screen Overview)
-หน้าจอสำหรับจัดการโครงสร้างหน่วยงานย่อยภายใต้บริษัท ได้แก่ สาขา (`db_branch`) สำนักงานสาขา คลังสินค้า และแผนกงาน (`db_department`) เพื่อใช้กำหนดขอบเขตการทำงาน (Data Scoping / Cost Center) และการเข้าถึงข้อมูลของพนักงาน
+## 🎯 1. Screen Overview
+Screen for managing organizational sub-units under a company — including branches (`db_branch`), regional offices, warehouses, and departments (`db_department`) — used for operational data scoping, cost centers, and employee access boundaries.
 
 ---
 
-## 📝 2. ขอบเขตและข้อกำหนดการทำงาน (Scope & Requirements)
-<!-- 
-  ส่วนนี้เปิดไว้สำหรับระบุ Scope ละเอียดของหน้าจอ:
-  สามารถเขียน Requirement, Business Logic, หรือ Wireframe ที่ต้องการได้ที่นี่
--->
+## 📝 2. Scope & Requirements
 
-### 2.1 วัตถุประสงค์ (Objectives)
-- *[ระบุวัตถุประสงค์ เช่น กำหนดสาขาสำนักงานใหญ่/สาขาย่อย, กำหนดแผนกงานและผังบังคับบัญชา]*
+### 2.1 Objectives
+- Define headquarters and sub-branches for each company, and manage departments under each branch.
 
-### 2.2 ข้อมูลนำเข้าและฟิลด์ที่เกี่ยวข้อง (Fields & Schema)
-- [ ] **ข้อมูลสาขา (Branch)**:
-  - รหัสสาขา (Branch Code): เช่น `HO`, `B001`
-  - ชื่อสาขาภาษาไทย / อังกฤษ: `db_branch_label`
-  - บริษัทต้นสังกัด: เลือกจาก `db_company`
-  - สำนักงานใหญ่ (Is Headquarter): boolean
-  - สถานที่ตั้งและที่อยู่: เชื่อมโยงกับ `db_address`
-- [ ] **ข้อมูลแผนก (Department)**:
-  - รหัสแผนก (Department Code): เช่น `IT`, `HR`, `ACC`
-  - ชื่อแผนกภาษาไทย / อังกฤษ: `db_department_label`
-  - แผนกแม่/สังกัด (Parent Department): รองรับ Hierarchical Tree
-  - สาขาที่สังกัด: เชื่อมโยงกับ `db_branch`
+### 2.2 Fields & Schema
+- [x] **Branch Information (`db_branch`)**:
+  - Branch Code: e.g. `HQ`, `B001`
+  - Branch Name (TH / EN): `db_branch_label`
+  - Parent Company: selected from `db_company`
+  - Branch Type (Headquarters / Sub-branch): `branch_type` (`db_master_lookup`)
+  - Address & Contacts: linked to `db_address_group` and `db_contact_group`
+- [x] **Department Information (`db_department`)**:
+  - Department Code: e.g. `IT`, `HR`, `ACC`
+  - Department Name (TH / EN): `db_department_label`
+  - Parent Branch: linked to `db_branch`
 
-### 2.3 การทำงานและเงื่อนไขทางธุรกิจ (Business Rules & Actions)
-- [ ] **Branch Tree View**: แสดงโครงสร้างสาขาและแผนกในรูปแบบ Tree Hierarchy
-- [ ] **Headquarter Rule**: บริษัทหนึ่งแห่งต้องมีสาขาสำนักงานใหญ่ (Headquarter) ได้เพียงแห่งเดียวเท่านั้น
-- [ ] **Validation**: ตรวจสอบการอ้างอิงพนักงานก่อนปิดการใช้งาน (Deactivate)
+### 2.3 Business Rules & Actions
+- [x] **Headquarters Rule**: Each company may have at most one headquarters branch (`branch_type = HEAD`).
+- [x] **Reference Check on Delete**: Branches or departments with dependent departments/employees cannot be deleted (`409 IN_USE`) and should be deactivated instead.
 
 ---
 
-## 🔒 3. สิทธิ์การเข้าใช้งาน (Permissions & Security)
-- **สิทธิ์ที่กำหนดในระบบ (`su_permission`)**:
-  - `READ`: ดูข้อมูลสาขาและแผนก
-  - `WRITE`: เพิ่ม แก้ไข โอนย้ายโครงสร้างสาขาและแผนก
-  - `APPROVE`: ลบข้อมูลสาขาและแผนก
-- **การตรวจสิทธิ์ที่ API (program `DBPG002`)**: ทุก endpoint ต้องมีสิทธิ์ตามโปรแกรม `DBPG002` — `READ` = ดู/ค้นหา (ทุก GET), `WRITE` = เพิ่ม/แก้ไข (POST/PUT), `APPROVE` = ลบ (DELETE); ไม่มีสิทธิ์จะได้ 403
-- **Data Scoping**: กรองการมองเห็นสาขาตามสิทธิ์ `branch_id` ของผู้ใช้งาน
+## 🔒 3. Permissions & Security
+- **Permissions defined in `su_permission`**:
+  - `READ`: View branch and department records
+  - `WRITE`: Create and update branches and departments
+  - `APPROVE`: Delete branches and departments
+- **API Enforcement (program `DBPG002`)**: Every endpoint enforces `DBPG002` permissions — `READ` = view/search (`GET`), `WRITE` = create/update (`POST`/`PUT`), `APPROVE` = delete (`DELETE`); missing permission returns `403`.
+- **Data Scoping**: Visibility is filtered by the user's `ViewScope`, and write/delete operations are checked against the user's assigned scope (`require_unit`: branches scoped by company, departments scoped by branch).
 
 ---
 
-## 🗄️ 4. ตารางฐานข้อมูลที่เกี่ยวข้อง (Database Entities)
-- `db_branch` (id, company_id, code, is_headquarter, active, ...)
-- `db_branch_label` (branch_id, language_id, label)
-- `db_department` (id, branch_id, department_id, code, active, ...)
-- `db_department_label` (department_id, language_id, label)
+## 🗄️ 4. Database Entities
+- `db_branch` (`id`, `company_id`, `code`, `branch_type_id`, `active`, ...)
+- `db_branch_label` (`branch_id`, `language_id`, `label`)
+- `db_department` (`id`, `branch_id`, `code`, `active`, ...)
+- `db_department_label` (`department_id`, `language_id`, `label`)
 
 ---
 
 ## 💻 5. Clean Architecture Implementation
 - **Frontend (Leptos WebAssembly)**: [`pages/db/dbpg002/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg002/) (`Dbpg002Page`, `Dbpg002BranchPage`, `Dbpg002DepartmentPage`)
-  - `/db/dbpg002` รายการสาขา/แผนก (แท็บ + ตัวกรองบริษัท/ค้นหา/สถานะ, `?company_id=` เลือกบริษัทล่วงหน้า)
-  - `/db/dbpg002/branch[/{id}]` ฟอร์มสาขา (`?company_id=`), `/db/dbpg002/department[/{id}]` ฟอร์มแผนก (`?branch_id=`, `?company_id=`)
+  - `/db/dbpg002`: Branch & Department list tabs with company filter, search, status filter, and `?company_id=` pre-selection
+  - `/db/dbpg002/branch[/{id}]`: Branch form (`?company_id=`), `/db/dbpg002/department[/{id}]`: Department form (`?branch_id=`, `?company_id=`)
 - **Backend API (Axum 0.8)** — base `/api/v1/db/dbpg002` ([`dbpg002_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/dbpg002_router.rs)):
   - `GET /companies`, `GET /summary`, `GET /branches/types`
-  - `GET|POST /branches`, `GET|PUT /branches/{id}`
+  - `GET|POST /branches`, `GET|PUT /branches/{id}`, `GET|PUT /branches/{id}/contacts`
   - `GET|POST /departments`, `GET|PUT /departments/{id}`
-  - `DELETE /branches/{id}` ลบจริงเมื่อไม่มีการอ้างอิง (ลบ label และ address/contact group ของสาขาไปด้วยใน transaction เดียว; สำนักงานใหญ่ลบไม่ได้ → 400; ถ้ายังมีแผนก/พนักงานอ้างอิง → 409 `IN_USE` ให้ปิดใช้งานแทน)
-  - `DELETE /departments/{id}` ลบจริงเมื่อไม่มีการอ้างอิง (ลบ label ของแผนกไปด้วย; ถ้ายังถูกอ้างอิง → 409 `IN_USE` ให้ปิดใช้งานแทน)
+  - `DELETE /branches/{id}`: permanently deletes the branch (along with its labels and address/contact groups in a single transaction) when unreferenced; headquarters branches cannot be deleted (`400`); if referenced by departments or employees, returns `409 IN_USE` (deactivate instead)
+  - `DELETE /departments/{id}`: permanently deletes the department and its labels when unreferenced; if referenced, returns `409 IN_USE` (deactivate instead)
 - **Application Layer**: [`features/db/dbpg002/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/application/master/src/features/db/dbpg002/) (`Dbpg002Queries`, `Dbpg002Commands`, `Dbpg002CommandExecutor`)
-- **Business rules ที่บังคับใช้**: รหัสสาขาไม่ซ้ำภายในบริษัท, รหัสแผนกไม่ซ้ำภายในสาขา, สำนักงานใหญ่ (`branch_type = HEAD`) ได้ 1 สาขาต่อบริษัท, optimistic lock ด้วย `row_version`, สร้างสาขาจะสร้าง `db_address_group` / `db_contact_group` ให้อัตโนมัติ (ภายใน transaction เดียว), แผนกอิงองค์กร/บริษัทตามสาขา, บริษัทของสาขาแก้ไขภายหลังไม่ได้
-- **ยังไม่ได้ทำ**: จัดการที่อยู่/ช่องทางติดต่อของสาขา, แผนกแม่ (ไม่มีคอลัมน์ใน `db_department`), ตรวจการอ้างอิงพนักงานก่อนปิดใช้งาน, Tree View
+- **Enforced Business Rules**: Unique branch code per company; unique department code per branch; at most one headquarters (`branch_type = HEAD`) per company; optimistic locking via `row_version`; creating a branch automatically provisions its `db_address_group` and `db_contact_group` within the same transaction; departments inherit organization/company from their branch; a branch's parent company cannot be changed after creation.
+- **Not Yet Implemented**: Branch street address editor UI, parent department hierarchy (no self-referencing column on `db_department`), active employee check before deactivation, and interactive tree view.
 - **Domain Layer**: `domain::entity::{db_branch, db_branch_label, db_department, db_department_label}`

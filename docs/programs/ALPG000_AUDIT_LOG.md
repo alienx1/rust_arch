@@ -5,10 +5,9 @@ system_code: "AL"
 module_code: "ALMT"
 route_path: "/al/alpg000"
 icon: "FileSearchOutlined"
-title_th: "บันทึกการตรวจสอบ"
 title_en: "Audit Log"
 parent_group: "ALPG000_GROUP"
-status: "Implemented (Quickwit; no Redpanda / S3 archive yet)"
+status: "Implemented (Quickwit + Redpanda CSV Export)"
 tags:
   - program
   - audit
@@ -17,121 +16,116 @@ tags:
   - screen
 ---
 
-# 🔍 ALPG000 - บันทึกการตรวจสอบ (Audit Log)
+# 🔍 ALPG000 - Audit Log
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `ALPG000`
-> - **ชื่อภาษาไทย**: บันทึกการตรวจสอบ
 > - **Title (EN)**: Audit Log
 > - **Route Path**: `/al/alpg000`
 > - **Icon**: `FileSearchOutlined` (`icondata_ai`)
-> - **System**: `AL` (ตรวจสอบ / Audit)
-> - **Module**: `ALMT` (ตรวจสอบระบบ / Audit Maintenance)
-> - **Parent Folder**: `ALPG000_GROUP` (ตรวจสอบ / Audit)
+> - **System**: `AL` (Audit)
+> - **Module**: `ALMT` (Audit Maintenance)
+> - **Parent Folder**: `ALPG000_GROUP` (Audit)
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000031`
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 1. ภาพรวมหน้าจอ (Screen Overview)
-หน้าจอสำหรับตรวจสอบและสืบค้นประวัติกิจกรรมที่เกิดขึ้นทั้งหมดในระบบ (Security & Business Audit Trail) เพื่อการปฏิบัติตามกฎหมาย (Compliance), การสืบสวนข้อผิดพลาด และความโปร่งใส ดึงข้อมูลการค้นหาความเร็วสูงผ่าน **Quickwit OpenSearch-compatible Engine** บน Object Storage (Garage S3)
+## 🎯 1. Screen Overview
+Screen for inspecting and searching the complete history of system and business activities (Security & Business Audit Trail) for compliance, incident investigation, and operational transparency. Powered by high-speed full-text search via the **Quickwit OpenSearch-compatible Engine** backed by Object Storage (Garage S3).
 
 ---
 
-## 📝 2. ขอบเขตและข้อกำหนดการทำงาน (Scope & Requirements)
-<!-- 
-  ส่วนนี้เปิดไว้สำหรับระบุ Scope ละเอียดของหน้าจอ:
-  สามารถเขียน Requirement, Business Logic, หรือ Wireframe ที่ต้องการได้ที่นี่
--->
+## 📝 2. Scope & Requirements
 
-### 2.1 วัตถุประสงค์ (Objectives)
-- *[ระบุวัตถุประสงค์ เช่น ให้ผู้ตรวจสอบ (Auditor) สืบค้นเหตุการณ์ย้อนหลัง, ดู Before/After JSON diff]*
+### 2.1 Objectives
+- Allow auditors and administrators to query historical events, inspect request/response payloads, and review row-level before/after JSON diffs.
 
-### 2.2 ข้อมูลนำเข้าและฟิลด์ที่เกี่ยวข้อง (Fields & Schema)
-- [ ] **เกณฑ์การค้นหาและตัวกรอง (Search Filters)**:
-  - ช่วงวันและเวลา (Timestamp Range): From - To
-  - ผู้กระทำ (Actor / User): `user_id`, `username`, `email`
-  - หมายเลข IP และ User Agent
-  - โปรแกรมเป้าหมาย (Target Program): เช่น `DBPG001`, `SUPG004`
-  - การกระทำ (Action): `CREATE`, `UPDATE`, `DELETE`, `LOGIN`, `APPROVE`
-  - ค้นหาคำเต็ม (Full-text Search): ค้นหาใน Payload/Diff
-- [ ] **การแสดงผลรายละเอียดบันทึก (Event Details)**:
+### 2.2 Fields & Schema
+- [x] **Search Filters**:
+  - Timestamp Range: From – To
+  - Actor / User: `user_id`, `username`, `email`
+  - Client IP Address & User Agent
+  - Target Program: e.g. `DBPG001`, `SUPG004`
+  - Event Kind / Action: `api`, `data_change`, `page_view`, `click`, `action`, `event_report_request`, `event_notification`
+  - Full-text Search: searches across payloads and diffs
+- [x] **Event Detail View**:
   - Event ID & Timestamp (UTC / Local ICT)
-  - Correlation ID / Trace ID
-  - ตารางและ Record ID ที่ได้รับผลกระทบ
-  - ข้อมูลก่อนหน้าและหลังแก้ไข (Before / After Snapshot Diff)
+  - Correlation ID / Request ID
+  - Affected Tables & Record IDs
+  - Before / After Snapshot Diff
 
-### 2.3 การทำงานและเงื่อนไขทางธุรกิจ (Business Rules & Actions)
-- [ ] **Immutability**: บันทึก Audit Log ทั้งหมดต้องเป็นแบบ Append-only / Write Once Read Many (WORM) ห้ามแก้ไขหรือลบผ่านหน้าจอนี้โดยเด็ดขาด
-- [x] **Export CSV**: ปุ่ม "ส่งออก CSV" ในแถบตัวกรอง → `POST /api/v1/al/alpg000/exports` (พารามิเตอร์ตัวกรองเดียวกับรายการ ไม่มี `page`/`limit`) ต้องมีสิทธิ์ READ ของ ALPG000 ทำงานเบื้องหลังผ่าน Redpanda ไม่ค้างหน้าจอ:
-  1. api-master ตรวจสิทธิ์/ตัวกรอง แล้ว publish `ReportJobMessage` ลง topic `report.requests` (key = job id) → ตอบ **202** `{job_id}` (broker ล่ม → 503)
-  2. `api-report` (worker, consumer group `report-worker`) อ่านข้อความ → ดึง event ทั้งหมดที่ตรงตัวกรองจาก Quickwit ด้วย scroll ทีละ 5,000 แถว → เขียนเป็น CSV ขึ้น Object Storage (Garage) แบบ multipart ทีละ 8 MiB (ไม่เก็บทั้งไฟล์ในหน่วยความจำ) ที่ `reports/<job id>.csv` เพดาน 5,000,000 แถว
-  3. สถานะงานอยู่ในตาราง `rp_report_job` (running → succeeded | failed) และแจ้งผู้ขอผ่าน `NotificationService` (adapter = publish ลง topic `notifications`) → **notification service** (NTPG000) เก็บลง `nt_notification` แล้ว push ผ่าน SSE
-  4. เว็บรับ noti ที่กระดิ่งใน topbar (ทุกหน้า ทุกแท็บ ทุกอุปกรณ์ของผู้ใช้นั้น) → "รายงานของฉัน" (RPPG000, `/rp/rppg000`) → ดูตัวอย่าง (100 แถวแรก อ่านด้วย ranged GET) หรือดาวน์โหลด (api-report ตอบ signed URL อายุ 5 นาทีเป็น JSON แล้วเบราว์เซอร์เปิดเอง ไม่ใช้ redirect เพราะ proxy ที่ตาม redirect เองทำให้ลายเซ็น Host ผิด)
-  - ผู้ขอเท่านั้นที่เห็นไฟล์ของตัวเอง (ของคนอื่น = 404)
-  - ไฟล์: UTF-8 + BOM (Excel อ่านภาษาไทยถูก), CRLF, 1 event ต่อ 1 แถว, ชื่อ `audit-log-YYYYMMDD-HHMMSS.csv`
-  - คอลัมน์: `time_th` (UTC+7) `time_utc` `kind` `user_id` `username` `email` `ip` `method` `path` `query` `status` `duration_ms` `program` `action` `page` `element` `label` `tables` `summary` `changes` `request_id` — ไม่รวม header/body (ใหญ่เกินอ่าน); `changes` ของ data_change เป็นบรรทัดเดียว `table OP row_id: col: เดิม -> ใหม่` คั่นแต่ละแถวด้วย ` | ` (ตัดที่ 1,500 ตัวอักษร)
-  - ค่าที่ขึ้นต้นด้วย `= + - @` ถูกใส่ `'` นำหน้า กันสูตรใน Excel (CSV injection)
-  - Store ล่มกลางทาง → งาน `failed` (abort multipart, ไม่ทิ้งไฟล์ครึ่งเดียว) + noti แจ้งล้มเหลว
-  - ข้อจำกัด: Excel เปิดได้ไม่เกิน 1,048,576 แถวต่อชีต — ไฟล์ใหญ่กว่านี้ให้แบ่งด้วยตัวกรองช่วงเวลา หรือเปิดด้วย Power Query / DB tool; ผู้ใช้ที่ออฟไลน์ตอนไฟล์เสร็จไม่ได้ noti แต่เห็นงานใน RPPG000; job row เกิดเมื่อ worker รับงาน (ถ้า worker ล่ม งานรออยู่ใน Redpanda)
-- [ ] **Export PDF**: ยังไม่ทำ
-
----
-
-## 🔒 3. สิทธิ์การเข้าใช้งาน (Permissions & Security)
-- **สิทธิ์ที่กำหนดในระบบ (`su_permission`)**:
-  - `READ`: ค้นหาและดูบันทึก Audit Log
-  - `WRITE`: *(ปิดการใช้งาน - ไม่มีฟังก์ชัน Write ในระบบ Audit Log)*
-  - `APPROVE`: อนุมัติการ Export ข้อมูลประวัติการตรวจสอบขนาดใหญ่
-- **Access Restriction**: สงวนสิทธิ์สำหรับกลุ่ม Auditor, Security Officer และ Super Admin
+### 2.3 Business Rules & Actions
+- [x] **Immutability**: All audit log entries are strictly append-only / Write Once Read Many (WORM) — they can never be modified or deleted through this screen.
+- [x] **Export CSV**: Clicking "Export CSV" in the filter bar sends `POST /api/v1/al/alpg000/exports` (accepting the same filter parameters as the list query, without `page`/`limit`). Requires `READ` permission on `ALPG000` and runs asynchronously in the background via Redpanda without blocking the UI:
+  1. `api-master` validates permissions and filter parameters, then publishes a `ReportJobMessage` to the `report.requests` topic (key = job ID) → responds **202** `{job_id}` (or `503` if the broker is unreachable).
+  2. `api-report` (worker, consumer group `report-worker`) consumes the message → scrolls all matching events from Quickwit in batches of 5,000 rows → streams a CSV via multipart upload (8 MiB parts, without buffering the whole file in memory) to Object Storage (Garage) at `reports/<job_id>.csv`, capped at 5,000,000 rows.
+  3. Job state is tracked in `rp_report_job` (`running` → `succeeded` | `failed`), and the requester is notified via `NotificationService` (publishing to the `notifications` topic) → **notification service** (`NTPG000`) persists the notification in `nt_notification` and pushes it over SSE.
+  4. The web UI receives the notification in the topbar bell (across all pages, tabs, and devices signed in as that user) → navigates to "My Reports" (`RPPG000`, `/rp/rppg000`) → previews the first rows (via ranged GET) or downloads the file (`api-report` returns a 5-minute pre-signed URL as JSON so the browser opens it directly rather than following a proxy redirect that would invalidate the `Host` signature).
+  - Only the requester can view or download their own report (other users receive `404`).
+  - File format: UTF-8 with BOM (so Excel renders Thai characters properly), CRLF line endings, 1 event per row, filename `audit-log-YYYYMMDD-HHMMSS.csv`.
+  - Columns: `time_th` (UTC+7), `time_utc`, `kind`, `user_id`, `username`, `email`, `ip`, `method`, `path`, `query`, `status`, `duration_ms`, `program`, `action`, `page`, `element`, `label`, `tables`, `summary`, `changes`, `request_id` — request/response headers and bodies are omitted from the CSV for readability; for `data_change` events, `changes` is formatted on a single line as `table OP row_id: col: old -> new` separated by ` | ` (truncated at 1,500 chars).
+  - Values starting with `=`, `+`, `-`, or `@` are prefixed with `'` to prevent spreadsheet formula injection (CSV injection).
+  - If object storage fails mid-upload → the job is marked `failed` (multipart upload is aborted so no partial object remains) and a failure notification is sent.
+  - Limitations: Excel supports at most 1,048,576 rows per sheet — larger exports should be narrowed by date range or opened with Power Query / a database tool; users offline when the job finishes will see the completed report in `RPPG000` (and in their notification list upon reconnecting); the `rp_report_job` row is created when the worker picks up the message (if the worker is down, the request waits in Redpanda).
+- [ ] **Export PDF**: Not implemented yet.
 
 ---
 
-## 🗄️ 4. แหล่งจัดเก็บข้อมูล (Storage Engine)
-- **Search Engine**: Quickwit 0.8 (Index: `audit-logs-v1`, mapping ที่ `infrastructure/src/services/quickwit/audit_logs_v1_index.json`) แอปสร้าง index เองเมื่อยังไม่มี (รวมถึงหลัง Quickwit รีสตาร์ท)
-- **การบันทึก**: ส่งตรงเข้า Quickwit ผ่าน REST ingest เป็นชุด (ทุก 1 วินาที หรือครบ 200 รายการ) ผ่านคิวที่ไม่ถ่วง request; Quickwit ล่ม = ทิ้งเหตุการณ์ (มี retry สั้น ๆ) ไม่กระทบการใช้งาน
-- **ยังไม่ได้ทำ**: Redpanda topic `audit.events`, เก็บถาวร Garage S3 `arch-audit`, Export CSV/PDF, บันทึก SELECT (อ่านข้อมูล)
-- **Data change (`kind=data_change`)**: trigger `al_capture_change` (ใน `sql/01_ysql.sql`) บนทุกตารางจับ INSERT / UPDATE / DELETE (UPDATE ที่เปลี่ยนแค่ `row_version` ไม่ถูกจับ) พร้อมแถวก่อน/หลัง (ปิดบังฟิลด์ password/secret/token) ลงตาราง outbox `al_data_change` ใน transaction เดียวกัน แล้ว `spawn_data_change_shipper` รวมแถวของ API request เดียวกัน (`request_id`) เป็น **1 event** (`changes` = รายการแถวที่เปลี่ยน: table, op, row_id, columns, old, new; `detail` = สรุปรายตาราง) ส่งเข้า Quickwit ทุก 2 วินาทีและลบออกจาก outbox ผู้กระทำมาจาก session setting `app.actor_id` / `app.actor_name` / `app.request_id` ที่ middleware `audit_trail` ตั้งให้ทุก connection ของ request เขียน (`infrastructure::with_actor` + `track_actor`); `request_id` = `event_id` ของ API event เดียวกัน การเขียนที่ไม่มีผู้กระทำ (seed, migration, worker) จะไม่ถูกจับ
-- **หมายเหตุ (dev)**: ข้อมูลของ Quickwit อยู่บน PVC `arch-logging-data` (local-path) — pod รีสตาร์ทข้อมูลไม่หาย แต่ลบ PVC/cluster แล้วหาย
-- **ตั้งค่า**: `QUICKWIT_URL` (ค่าเริ่มต้น `http://localhost:7280`), `AUDIT_LOG_ENABLED` (ค่าเริ่มต้น true)
+## 🔒 3. Permissions & Security
+- **Permissions defined in `su_permission`**:
+  - `READ`: Search and view audit logs, and request CSV exports
+  - `WRITE`: *(Unused — Audit Log is read-only)*
+  - `APPROVE`: Approve large-scale audit exports
+- **Access Restriction**: Reserved for Auditors, Security Officers, and Super Admins.
 
-### 4.1 เหตุการณ์ที่บันทึก (`AuditEvent`, `application/core/src/traits/audit_log.rs`)
-| kind | มาจาก | เนื้อหา |
+---
+
+## 🗄️ 4. Storage Engine
+- **Search Engine**: Quickwit 0.8 (Index: `audit-logs-v1`, mapping at `infrastructure/src/services/quickwit/audit_logs_v1_index.json`). The application automatically creates the index if missing (including after a Quickwit restart).
+- **Ingestion**: Batched directly to Quickwit's REST ingest endpoint (flushed every 1 second or 200 events) via a non-blocking background queue; if Quickwit is down, events are dropped after brief retries without impacting API latency.
+- **Not Yet Implemented**: Dedicated Redpanda `audit.events` ingestion pipeline, cold S3 archival bucket `arch-audit`, PDF export, and `SELECT` query logging.
+- **Data Changes (`kind=data_change`)**: The `al_capture_change` PostgreSQL trigger (in `sql/01_ysql.sql`) attached to every table captures `INSERT` / `UPDATE` / `DELETE` operations (ignoring `UPDATE`s that only touch `row_version`) along with before/after row snapshots (redacting password/secret/token columns) into the `al_data_change` outbox table within the same database transaction. `spawn_data_change_shipper` groups rows sharing the same API `request_id` into **a single audit event** (`changes` = list of mutated rows with `table`, `op`, `row_id`, `columns`, `old`, `new`; `detail` = per-table summary), ships them to Quickwit every 2 seconds, and deletes them from the outbox. The actor is read from PostgreSQL session settings `app.actor_id` / `app.actor_name` / `app.request_id` populated by the `audit_trail` middleware (`infrastructure::with_actor` + `track_actor`); `request_id` matches the `event_id` of the corresponding `api` audit event. Database writes without a session actor (seeds, migrations, background workers) are not captured by the trigger.
+- **Dev Note**: Quickwit data is stored on PVC `arch-logging-data` (`local-path`) — data survives pod restarts, but is removed if the PVC or cluster is deleted.
+- **Configuration**: `QUICKWIT_URL` (default `http://localhost:7280`), `AUDIT_LOG_ENABLED` (default `true`).
+
+### 4.1 Recorded Event Kinds (`AuditEvent`, `application/core/src/traits/audit_log.rs`)
+| Kind | Source | Captured Content |
 |---|---|---|
-| `api` | เซิร์ฟเวอร์ (system log) ทุก request ของ `/api/v1/**` | ใคร (`user_id` = Kratos identity id, username, email, session, IP, user agent, ภาษา), เรียกอะไร (method, path, query, โปรแกรม, action), status, ระยะเวลา, headers, request/response body |
-| `page_view` | เว็บ | เปิดหน้าไหน |
-| `click` | เว็บ | กดปุ่ม/ลิงก์อะไร (องค์ประกอบ + ข้อความบนปุ่ม + หน้า) ไม่เก็บค่าที่พิมพ์ในช่องกรอก |
-| `action` | เว็บ | process ที่ทำสำเร็จ เช่น `DBPG004.save`, `SUPG003.matrix.save`, `SUPG004.recovery_link` |
+| `api` | Server middleware for every `/api/v1/**` request | Actor (`user_id` = Kratos identity ID, `username`, `email`, `session`, `ip`, `user_agent`, `language`), target (`method`, `path`, `query`, `program`, `action`), HTTP `status`, `duration_ms`, headers, and request/response bodies |
+| `page_view` | Web client | Route path opened by the user |
+| `click` | Web client | Button or link clicked (element tag + button label + current page); never records text typed into input fields |
+| `action` | Web client | Completed client workflow action, e.g. `DBPG004.save`, `SUPG003.matrix.save`, `SUPG004.recovery_link` |
 
-- **การปิดบังข้อมูล**: headers `cookie`/`authorization`/`x-api-key` ฯลฯ และ field ใน body/query ที่ชื่อมี password/secret/token/cookie/api key/credential ถูกแทนที่ด้วย `***`
-- **Body**: แปลง CBOR เป็น JSON (UUID แสดงเป็นรูป hyphenated) เก็บไม่เกิน 16 KiB; body ที่ไม่ทราบขนาดล่วงหน้า/เกิน 256 KiB ไม่เก็บ (ระบุขนาดแทน)
-- **ข้ามการบันทึก**: `/api/v1/audit/**`, การอ่านของหน้า ALPG000 เอง, พจนานุกรม i18n, OPTIONS
+- **Redaction**: Headers such as `cookie`, `authorization`, `x-api-key`, etc., and any body/query fields whose names contain `password`, `secret`, `token`, `cookie`, `api_key`, or `credential` are replaced with `***`.
+- **Bodies**: CBOR payloads are decoded to JSON (with UUIDs formatted as hyphenated strings) and stored up to 16 KiB; streaming bodies or payloads exceeding 256 KiB are omitted (recording only their byte size).
+- **Excluded Paths**: `/api/v1/audit/**`, `ALPG000`'s own read queries, i18n dictionary fetches, and `OPTIONS` preflight requests.
 
 ---
 
 ## 💻 5. Clean Architecture Implementation
-- **Frontend (Leptos)**: `pages/al/alpg000/` — `/al/alpg000` (ตารางพร้อมตัวกรอง: ช่วงเวลา, ชนิด, สถานะ 2xx–5xx, ผู้ใช้, method, โปรแกรม, path, ค้นข้อความ) และ `/al/alpg000/log/{id}` (รายละเอียด + request/response JSON); ตัวจับกิจกรรมที่ `src/audit/` (เปิดหน้า, คลิก, `track_action`) ส่งเป็นชุดทุก ~3 วินาที
-- **Backend API** (`/api/v1/al/alpg000`, ต้องมีสิทธิ์ READ): `GET /logs`, `GET /logs/{id}`, `GET /status`; ผู้ใช้ทุกคนส่งกิจกรรมของตัวเองได้ที่ `POST /api/v1/audit/events` (ใช้ session อย่างเดียว) ถ้า Quickwit ไม่พร้อมตอบ 503 `AUDIT_UNAVAILABLE`
-- **Application Layer**: `application/master/src/features/al/alpg000/`; port `AuditLogPort` ที่ `application/core`
-- **Infrastructure Layer**: `infrastructure/src/services/quickwit/` (`QuickwitAuditLog`: คิว + flusher + query builder); middleware `infrastructure/src/middleware/audit/audit_trail.rs`
-- **ข้อจำกัดการค้นหา**: `path` ค้นแบบ token/prefix (เช่น `dbpg004`) ไม่ใช่ substring ตัวอักษรใดก็ได้; ค้นข้อความถูกตัดคำตาม tokenizer ของ Quickwit
-- **Tests**: `alpg000_test.rs`, `alpg000_router_test.rs`, `audit_trail_test.rs`, `infrastructure/tests/quickwit_audit_query_test.rs` (มี integration test ที่ยิง Quickwit จริงแบบ `--ignored`)
+- **Frontend (Leptos)**: `pages/al/alpg000/` — `/al/alpg000` (filterable data table: date range, kind, HTTP status `2xx`–`5xx`, user, method, program, path, full-text query) and `/al/alpg000/log/{id}` (event detail + formatted request/response JSON & row diffs); client-side activity tracker in `src/audit/` (page views, clicks, `track_action`) flushes batches every ~3 seconds.
+- **Backend API** (`/api/v1/al/alpg000`, requires `READ` permission): `GET /logs`, `GET /logs/{id}`, `GET /status`; any authenticated user can submit their own client activity events to `POST /api/v1/audit/events` (session-authenticated). Returns `503 AUDIT_UNAVAILABLE` if Quickwit is unreachable.
+- **Application Layer**: `application/master/src/features/al/alpg000/`; port `AuditLogPort` in `application/core`.
+- **Infrastructure Layer**: `infrastructure/src/services/quickwit/` (`QuickwitAuditLog`: queue + batch flusher + query builder); middleware `infrastructure/src/middleware/audit/audit_trail.rs`.
+- **Search Behavior**: `path` searches by token/prefix (e.g. `dbpg004`), not arbitrary mid-word substrings; full-text queries are tokenized by Quickwit's default tokenizer.
+- **Tests**: `alpg000_test.rs`, `alpg000_router_test.rs`, `audit_trail_test.rs`, `infrastructure/tests/quickwit_audit_query_test.rs` (includes `--ignored` live Quickwit integration tests).
 
-## Event จาก Redpanda (`event_report_request`, `event_notification`)
+## Redpanda Stream Events (`event_report_request`, `event_notification`)
 
-ตัวกรอง "ประเภท" มีสอง kind เพิ่ม ซึ่งอ่านจาก index `events-report-requests-v1` / `events-notifications-v1` (Kafka source ของ Quickwit, ตั้งด้วย `make event-indexes` — ดู `NTPG000_NOTIFICATIONS.md`) แทน `audit-logs-v1`:
+The "Kind" filter includes two additional event types that query Quickwit indexes `events-report-requests-v1` and `events-notifications-v1` (ingested directly by Quickwit's Kafka source, configured via `make event-indexes` — see `NTPG000_NOTIFICATIONS.md`) instead of `audit-logs-v1`:
 
-- เลือกได้ครั้งละ 1 kind (ไม่รวมกับ kind อื่น); ใช้ได้เฉพาะตัวกรองเวลา, ผู้ใช้ (ผู้ขอ / ผู้รับ) และค้นข้อความ — ตัวกรอง method / status / program / path ใช้กับ event เหล่านี้ไม่ได้
-- ปุ่มดูรายละเอียดทำงานตามปกติ (`GET /logs/{id}` ค้น job id / notification id)
-- ส่งออก CSV ไม่รองรับ (คำขอ export ที่เลือก kind นี้ตอบ 400)
-- โค้ด: `infrastructure/src/services/quickwit/event_stream_query.rs`, ทดสอบที่ `infrastructure/tests/event_stream_query_test.rs`
+- Selected one kind at a time (not combined with other kinds); supports date range, user (requester / recipient), and full-text search filters — HTTP method, status, program, and path filters do not apply to stream events.
+- Clicking an event row opens its full detail view as usual (`GET /logs/{id}` looks up the job ID or notification ID).
+- CSV export is not supported for these stream event kinds (export requests with these kinds return `400`).
+- Implementation: `infrastructure/src/services/quickwit/event_stream_query.rs`, tested in `infrastructure/tests/event_stream_query_test.rs`.
 
-## ช่วงวันที่ (date range)
+## Date Range Picker
 
-ตัวกรองเวลาเป็นปุ่ม "ช่วงวันที่" (คอมโพเนนต์ร่วม `web_package::ui::component::DateRangePicker`) แทนปุ่มช่วงเวลาด่วนเดิม กดแล้วเปิด popover:
+The time filter uses the shared `web_package::ui::component::DateRangePicker` popover button:
 
-- ซ้าย: preset ด่วน — วันนี้, เมื่อวาน, 7 วันล่าสุด, 30 วันล่าสุด, เดือนนี้, เดือนที่แล้ว, ทุกช่วงเวลา
-- ขวา: ปฏิทินรายเดือน (ปีแสดงเป็น พ.ศ. ในภาษาไทย) กดวันแรก เลื่อนเมาส์เพื่อดูแถบช่วงที่จะเลือก แล้วกดวันสุดท้ายเพื่อใช้ทันที; กดนอก popover หรือ Esc เพื่อปิด; บนมือถือ popover กว้างเต็มจอ
-- ค่าเริ่มต้น = **วันนี้**; "ทุกช่วงเวลา" = ไม่จำกัดเวลา
-- วันที่ตีความเป็นเวลาท้องถิ่นของ browser: `from` = 00:00 ของวันแรก, `to` = 00:00 ของ **วันถัดจากวันสุดท้าย** (exclusive) จึงรวมทั้งวันสุดท้าย — เช่น 12 ต.ค. ใน UTC+7 ส่ง `from=2026-10-11T17:00:00Z&to=2026-10-12T17:00:00Z`
-- "ส่งออก CSV" ใช้ช่วงวันที่เดียวกัน
+- **Left pane**: quick presets — Today, Yesterday, Last 7 Days, Last 30 Days, This Month, Last Month, All Time.
+- **Right pane**: monthly calendar (displays Buddhist Era year when viewing in Thai). Click the start date, hover to preview the range, and click the end date to apply immediately; click outside or press `Esc` to close; expands full-width on mobile viewports.
+- Default selection = **Today**; "All Time" = no timestamp filter.
+- Dates are interpreted in the browser's local timezone: `from` = `00:00` of the start date, `to` = `00:00` of the **day after the end date** (exclusive), covering the entire end date — e.g. Oct 12 in UTC+7 sends `from=2026-10-11T17:00:00Z&to=2026-10-12T17:00:00Z`.
+- "Export CSV" uses the exact same selected date range.

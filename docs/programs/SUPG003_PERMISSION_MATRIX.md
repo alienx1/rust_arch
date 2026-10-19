@@ -5,7 +5,6 @@ system_code: "SU"
 module_code: "SUMT"
 route_path: "/su/supg003"
 icon: "SafetyOutlined"
-title_th: "แฟ้มสิทธิ์การเข้าใช้งาน"
 title_en: "Permission Matrix"
 parent_group: "SUPG000"
 status: "Implemented"
@@ -18,83 +17,71 @@ tags:
   - screen
 ---
 
-# 🛡️ SUPG003 - แฟ้มสิทธิ์การเข้าใช้งาน (Permission Matrix)
+# 🛡️ SUPG003 - Permission Matrix
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `SUPG003`
-> - **ชื่อภาษาไทย**: แฟ้มสิทธิ์การเข้าใช้งาน
 > - **Title (EN)**: Permission Matrix
 > - **Route Path**: `/su/supg003`
 > - **Icon**: `SafetyOutlined` (`icondata_ai`)
-> - **System**: `SU` (ความปลอดภัย / Security)
-> - **Module**: `SUMT` (จัดการสิทธิ์ / Security Maintenance)
-> - **Parent Folder**: `SUPG000` (กำหนดสิทธิ์ / Security)
+> - **System**: `SU` (Security)
+> - **Module**: `SUMT` (Security Maintenance)
+> - **Parent Folder**: `SUPG000` (Security)
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000023`
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 1. ภาพรวมหน้าจอ (Screen Overview)
-หน้าจอสำคัญสำหรับการบริหารจัดการความปลอดภัยและการอนุญาตเข้าถึง (Authorization Management) จัดการกลุ่มสิทธิ์ (`su_permission_group`), กำหนดสิทธิ์แบบ Matrix Table ตามโปรแกรมและ Action (`READ`, `WRITE`, `APPROVE`) และกำหนดขอบเขตข้อมูลแบบ ABAC Scope (`company_id`, `branch_id`, `department_id`)
+## 🎯 1. Screen Overview
+Core authorization management screen for defining permission groups (`su_permission_group`) and configuring their program × action grant matrix (`READ`, `WRITE`, `APPROVE`).
 
 ---
 
-## 📝 2. ขอบเขตและข้อกำหนดการทำงาน (Scope & Requirements)
-<!-- 
-  ส่วนนี้เปิดไว้สำหรับระบุ Scope ละเอียดของหน้าจอ:
-  สามารถเขียน Requirement, Business Logic, หรือ Wireframe ที่ต้องการได้ที่นี่
--->
+## 📝 2. Scope & Requirements
 
-### 2.1 วัตถุประสงค์ (Objectives)
-- *[ระบุวัตถุประสงค์ เช่น สร้างกลุ่มสิทธิ์ (เช่น HR_MANAGER, ACCOUNTANT), ติ๊กเลือกสิทธิ์ในตาราง Matrix]*
+### 2.1 Objectives
+- Create and manage permission groups (e.g. `ADMIN`, `HR_MANAGER`, `ACCOUNTANT`) and toggle `READ` / `WRITE` / `APPROVE` grants per program in an interactive matrix grid.
 
-### 2.2 ข้อมูลนำเข้าและฟิลด์ที่เกี่ยวข้อง (Fields & Schema)
-- [ ] **กลุ่มสิทธิ์ (Permission Group)**:
-  - รหัสกลุ่มสิทธิ์ (Group Code): เช่น `ADMIN`, `SUPV`, `OPERATOR`
-  - ชื่อกลุ่มสิทธิ์ภาษาไทย / อังกฤษ
-  - คำอธิบายหน้าที่ความรับผิดชอบ
-- [ ] **ตารางเมทริกซ์สิทธิ์ (Permission Matrix Grid)**:
-  - แกนแถว (Rows): รายการ System -> Module -> Program (Tree View)
-  - แกนคอลัมน์ (Columns): สิทธิ์การทำงาน (`READ`, `WRITE`, `APPROVE`)
-  - Checkboxes: ติ๊กเปิด/ปิดสิทธิ์ในแต่ละช่อง
-- [ ] **การกำหนดขอบเขตข้อมูล (ABAC Scope Dimensions)**:
-  - Scope ระดับบริษัท (Company Scope)
-  - Scope ระดับสาขา (Branch Scope)
-  - Scope ระดับแผนก (Department Scope)
+### 2.2 Fields & Schema
+- [x] **Permission Group (`su_permission_group`)**:
+  - Group Code: e.g. `ADMIN`, `SUPV`, `OPERATOR`
+  - Active Status: `active`
+- [x] **Permission Matrix Grid (`su_permission`)**:
+  - Rows: System -> Module -> Program hierarchy
+  - Columns: Permission actions (`READ`, `WRITE`, `APPROVE`)
+  - Checkboxes: Grant or revoke each action per program (granting `WRITE` or `APPROVE` automatically requires `READ`)
 
-### 2.3 การทำงานและเงื่อนไขทางธุรกิจ (Business Rules & Actions)
-- [ ] **Admin Group Protection**: กลุ่ม `ADMIN` มีสิทธิ์เต็มทุกโปรแกรมโดยอัตโนมัติ (ห้ามถอดสิทธิ์ตนเองจนหมด)
-- [ ] **Bulk Grant / Revoke**: มีปุ่ม "เลือกทั้งหมดในโมดูล" (Select All in Module) เพื่อความสะดวกรวดเร็ว
-- [ ] **Audit Trail on Changes**: ทุกครั้งที่มีการเปลี่ยนแปลงสิทธิ์ ต้องบันทึกเหตุการณ์การแก้ไขลงใน Quickwit Audit Log อย่างละเอียด
+### 2.3 Business Rules & Actions
+- [x] **Admin Group Protection**: The `ADMIN` group automatically holds full permissions across all active programs and cannot have its matrix edited, be deactivated, or be deleted.
+- [x] **Self-Lockout Prevention**: Administrators cannot revoke permissions in a way that would remove their own access to `SUPG003`.
+- [x] **Bulk Grant / Revoke**: Select-all toggles allow granting or revoking permissions across an entire module or column rapidly.
+- [x] **Audit Trail on Changes**: Every permission group or matrix update is recorded in Quickwit (`ALPG000`).
 
 ---
 
-## 🔒 3. สิทธิ์การเข้าใช้งาน (Permissions & Security)
-- **สิทธิ์ที่กำหนดในระบบ (`su_permission`)**:
-  - `READ`: เข้าดูตารางกลุ่มสิทธิ์และเมทริกซ์
-  - `WRITE`: แก้ไขสิทธิ์ เพิ่มกลุ่มสิทธิ์ใหม่
-  - `APPROVE`: อนุมัติการเผยแพร่กลุ่มสิทธิ์ใหม่สู่ผู้ใช้งานจริง
-  - การลบกลุ่มสิทธิ์ (DELETE) ต้องมีสิทธิ์ `APPROVE` (ลบ = APPROVE)
+## 🔒 3. Permissions & Security
+- **Permissions defined in `su_permission`**:
+  - `READ`: View permission groups and their permission matrix
+  - `WRITE`: Create/update permission groups and save matrix changes
+  - `APPROVE`: Delete permission groups (`DELETE` requires `APPROVE`)
 
 ---
 
-## 🗄️ 4. ตารางฐานข้อมูลที่เกี่ยวข้อง (Database Entities)
-- `su_permission_group` (id, code, active, ...)
-- `su_permission` (id, permission_group_id, system_id, module_id, program_id, master_lookup_id, active, ...)
-- `su_user_permission_group` (เชื่อม User เข้ากับ Group)
-- `db_master_lookup` (หมวด `permission_type` สำหรับ action: READ, WRITE, APPROVE)
+## 🗄️ 4. Database Entities
+- `su_permission_group` (`id`, `code`, `active`, `row_version`, ...)
+- `su_permission` (`id`, `permission_group_id`, `system_id`, `module_id`, `program_id`, `master_lookup_id`, `active`, ...)
+- `su_user_assignment` (binds a user to a permission group at a specific organizational scope in `SUPG004`)
+- `db_master_lookup` (category `permission_type` for actions: `READ`, `WRITE`, `APPROVE`)
 
 ---
 
 ## 💻 5. Clean Architecture Implementation
-- **Frontend (Leptos)**: `pages/su/supg003/` (รายการกลุ่ม, `GroupForm`, `MatrixTable` แบบ checkbox + เลือกทั้งหมด) • routes `/su/supg003`, `/su/supg003/group[/:id]`, `/su/supg003/group/:id/matrix`
-- **Backend API** (`/api/v1/su/supg003`): `GET|POST /groups`, `GET|PUT /groups/{id}`, `GET|PUT /groups/{id}/matrix`
-- **Application**: `features/su/supg003/` (`plan_changes` เทียบสิทธิ์เดิม-ใหม่, ปิดแถวแทนการลบ; WRITE/APPROVE ต้องมี READ)
-- **ลบกลุ่ม**: `DELETE /groups/{id}` (WRITE → 204) ลบจริงพร้อมแถว `su_permission` ของกลุ่มใน transaction เดียว; กลุ่ม `ADMIN` ลบไม่ได้ (400), กลุ่มที่ยังมีผู้ใช้หรือถูกอ้างอิงอยู่ → 409 `IN_USE` (ให้ย้ายผู้ใช้ก่อน / ปิดใช้งานแทน)
-- **Optimistic lock**: `PUT /groups/{id}/matrix` ต้องส่ง `row_version` ของกลุ่มที่โหลดมา (`SaveMatrixCommand.row_version`) เมทริกซ์ถือเป็นส่วนหนึ่งของกลุ่ม: ถ้าเมทริกซ์เปลี่ยนจริง `su_permission_group.row_version` เพิ่มขึ้น 1 (ผ่าน `update_versioned`) ถ้าไม่มีอะไรเปลี่ยนเวอร์ชันคงเดิม; เวอร์ชันไม่ตรง → 412 `VERSION_CONFLICT` (ไม่มีอะไรถูกบันทึก)
-- **กฎสำคัญ**: กลุ่ม `ADMIN` แก้เมทริกซ์/ปิดใช้งานไม่ได้; ห้ามถอดสิทธิ์ที่ทำให้ผู้บันทึกเข้า SUPG003 ไม่ได้; ปิดกลุ่มที่ยังมีผู้ใช้ไม่ได้
-- **กลุ่มสิทธิ์ไม่มีขอบเขต**: `su_permission_group` เก็บแค่ `code`, `active` (รหัสกลุ่มไม่ซ้ำ) = ชุดสิทธิ์ "ทำอะไรได้" (โปรแกรม × READ/WRITE/APPROVE) ส่วน "ทำที่ไหน" (org / company / branch / department) กำหนดต่อผู้ใช้ที่หน้า SUPG004 ผ่าน `su_user_assignment` (ผู้ใช้ 1 คนถือได้หลายกลุ่มหลายขอบเขต เช่น กลุ่ม A ที่สาขา 1 และกลุ่ม B ที่สาขา 2 ได้ "สาขา 1 ทำ 1,2,3 / สาขา 2 ทำ 1,2,6") • กลุ่ม `ADMIN` ปิดใช้งานหรือลบไม่ได้
-- **ตรวจสิทธิ์ตามข้อมูลที่แตะ**: `AccessControl::authorize_in(user, program, action, ScopeTarget)` — ต้องมี assignment ที่กลุ่มให้สิทธิ์นั้น และขอบเขตของ assignment ครอบคลุมหน่วยที่แตะ (ขอบเขตสูงครอบคลุมหน่วยใต้มัน; ผู้ใช้ที่ไม่มีแถว assignment ถือว่ากลุ่มหลักใช้ได้ทุกที่) ใช้แล้วกับการเขียน/ลบของ DBPG002 (สาขา = ตามบริษัท, แผนก = ตามสาขา) และ DBPG003 (พนักงาน = ตามแผนก, ย้ายแผนกต้องมีสิทธิ์ทั้งสองฝั่ง) • การอ่าน (รายการ) และเมนูฝั่งเว็บดูสิทธิ์รวมทุก assignment และรายการข้อมูลยังไม่ถูกกรองตามขอบเขต
-- **หมายเหตุ**: การบันทึกเมทริกซ์เป็น last-write-wins
-- **ยังไม่บังคับใช้**: ขอบเขตของ assignment ยังไม่ได้กรองรายการข้อมูล (GET) ใน API อื่น
+- **Frontend (Leptos)**: `pages/su/supg003/` (group list, `GroupForm`, `MatrixTable` with checkboxes + select-all toggles) • routes `/su/supg003`, `/su/supg003/group[/{id}]`, `/su/supg003/group/{id}/matrix`
+- **Backend API** (`/api/v1/su/supg003`): `GET|POST /groups`, `GET|PUT|DELETE /groups/{id}`, `GET|PUT /groups/{id}/matrix`
+- **Application**: `features/su/supg003/` (`plan_changes` diffs current vs. desired grants and deactivates removed rows rather than hard-deleting; `WRITE`/`APPROVE` require `READ`)
+- **Deleting a Group**: `DELETE /groups/{id}` (`204 No Content`) permanently deletes the group along with its `su_permission` rows in a single transaction; `ADMIN` cannot be deleted (`400`); groups still assigned to users return `409 IN_USE` (reassign users first or deactivate instead)
+- **Optimistic Locking**: `PUT /groups/{id}/matrix` requires the group's loaded `row_version` (`SaveMatrixCommand.row_version`). The matrix is treated as part of the group aggregate: if any grant changes, `su_permission_group.row_version` is incremented by 1 via `update_versioned` (if no grants changed, the version stays unchanged); a stale version returns `412 VERSION_CONFLICT` without modifying any rows.
+- **Key Guardrails**: `ADMIN` cannot have its matrix modified or be deactivated; users cannot strip their own access to `SUPG003`; groups currently assigned to users cannot be deactivated.
+- **Separation of Role ("What") vs. Scope ("Where")**: `su_permission_group` stores only `code` and `active` — defining *what* actions are permitted (`program × READ/WRITE/APPROVE`). *Where* those permissions apply (organization / company / branch / department) is assigned per user in `SUPG004` via `su_user_assignment` (allowing a single user to hold Group A at Branch 1 and Group B at Branch 2).
+- **Scoped Authorization**: `AccessControl::authorize_in(user, program, action, ScopeTarget)` verifies that the user holds an active assignment whose group grants `action` on `program` and whose organizational unit covers the target record (higher-level scopes cover all descendant units). Used for write/delete checks in `DBPG002` and `DBPG003`, while read visibility is governed by `ViewScope` (see [[12_VIEW_SCOPE_COMPANY_SWITCHER]]).
 - **Tests**: `supg003_test.rs`, `supg003_router_test.rs`

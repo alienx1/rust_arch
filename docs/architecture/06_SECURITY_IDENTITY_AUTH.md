@@ -91,7 +91,7 @@ Kratos uses the OWASP-recommended Argon2id parameters:
      "active": true,
      "traits": {
        "email": "admin@arch.local",
-       "name": { "first": "ผู้ดูแล", "last": "ระบบ" }
+       "name": { "first": "System", "last": "Administrator" }
      }
    }
    ```
@@ -198,7 +198,7 @@ The flag is checked by the Kratos login hook (`/hooks/login-guard`, after the pa
 
 **Brute force.** Kratos cannot count failures, so the web proxy sends `/self-service/*` through api-master's gateway `/api/v1/auth/kratos/*`. It counts a failure only when Kratos answers "invalid credentials" (4000006), keyed by the user name (unknown names count too, so the answer never reveals whether an account exists). After the limit the account is locked: the login page shows message 4010001 and Kratos is not asked at all, even for the right password. Counters live in Valkey under `authguard:` (not flushed by `make cache-flush`); if Valkey is down they fall back to process memory. A lookup failure refuses the attempt (fail closed). Production: the reverse proxy in front of Kratos' public API must route `/self-service/*` through the gateway, otherwise the lock is bypassed.
 
-Settings (`su_configuration`, category `security`, edited by SQL — no screen yet; `sql/87_su_configuration_seed.sql`):
+Settings (`su_configuration`, category `security`; edited on the SUPG006 page, seeded by `sql/87_su_configuration_seed.sql`):
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -208,6 +208,12 @@ Settings (`su_configuration`, category `security`, edited by SQL — no screen y
 | `security.login.attempt_window_minutes` | 15 | window the failures are counted in |
 | `security.login.lock_minutes` | 15 | how long the account stays locked |
 | `security.password.mail_resend_minutes` | 5 | minimum gap between automatic re-mails |
+| `security.password.min_length` | 8 | shortest new password (8–128; Kratos refuses under 8) |
+| `security.password.require_uppercase` / `_lowercase` / `_digit` | 1 | a new password needs an uppercase letter / a lowercase letter / a digit |
+| `security.password.require_symbol` | 0 | … and a symbol |
+| `security.password.forbid_identifier` | 1 | … and must not contain the user name or the e-mail name (3+ characters) |
+
+**Password policy.** Kratos can only check a minimum length, so the gateway checks the rest: a `POST self-service/settings` carrying a `password` (the change-password page, and the page the set-password mail leads to) is compared with the policy first; a password that breaks it is answered with `400`, the settings flow and message `4010003` on the password field listing the rules it breaks (Thai / English), and Kratos never sees it. Unreadable policy ⇒ `503` (fail closed). Not covered: passwords set through the Kratos Admin API, old passwords (checked when next changed), and a deployment whose proxy bypasses the gateway.
 
 **Sign-in e-mail follows the employee's contacts.** Saving an employee's contacts (`PUT /db/dbpg003/employees/{id}/contacts`) sets Kratos `traits.email` of their account to the default e-mail contact (first one when none is default); the change is made before the contacts are committed, so an address already used by another account is refused with `409 CONFLICT` and nothing is saved. A contact list without e-mail leaves the account alone. Because the e-mail can then differ from the user name, the Kratos web hooks now also send `traits.username` and the account is found by it (apply the updated `configmap.yaml` and restart Kratos; before that, hooks fall back to the e-mail's local part).
 

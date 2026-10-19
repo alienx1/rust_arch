@@ -104,7 +104,7 @@ pages/<feature>/
 
 ## 🛠️ 3. How to Implement a New Feature (Step-by-Step)
 
-> **คู่มือฉบับเต็มและเป็นปัจจุบัน**: [`docs/guides/ADD_A_PROGRAM.md`](docs/guides/ADD_A_PROGRAM.md) (หน้าจอ+API ครบวงจร: DB, seed เมนู/สิทธิ์/i18n, แคช, เว็บ, test, เอกสาร) และ [`docs/guides/ADD_A_SERVICE.md`](docs/guides/ADD_A_SERVICE.md) (worker/service ใหม่). ขั้นตอนด้านล่างเป็นภาพรวมย่อ — ถ้าขัดกัน ให้ยึดคู่มือ
+> **Complete & up-to-date guides**: [`docs/guides/ADD_A_PROGRAM.md`](docs/guides/ADD_A_PROGRAM.md) (end-to-end screen + API: DB, menu/permissions/i18n seeds, cache, web, tests, docs) and [`docs/guides/ADD_A_SERVICE.md`](docs/guides/ADD_A_SERVICE.md) (new worker/service). The steps below are a brief summary — if they conflict, follow the guides.
 
 ### A. Backend Application & Router Implementation
 When asked to build a new backend feature (e.g. `department` or `employee`):

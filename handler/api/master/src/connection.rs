@@ -29,6 +29,7 @@ use application_master::features::al::alpg001::{Alpg001CommandExecutor, Alpg001C
 use application_master::features::su::supg004::{
     DbSupg004Queries, Supg004CommandExecutor, Supg004Commands, Supg004Queries,
 };
+use application_master::features::su::supg006::{DbSupg006Queries, Supg006CommandExecutor, Supg006Commands};
 use application_master::features::su::supg003::{
     DbSupg003Queries, Supg003CommandExecutor, Supg003Commands, Supg003Queries,
 };
@@ -106,6 +107,7 @@ pub struct AppConnection {
     pub supg002_commands: Arc<dyn Supg002Commands>,
     /// SUPG003 (permission matrix) commands interface
     pub supg003_commands: Arc<dyn Supg003Commands>,
+    pub supg006_commands: Arc<dyn Supg006Commands>,
     /// SUPG004 (user accounts) commands interface
     pub supg004_commands: Arc<dyn Supg004Commands>,
     /// ALPG000 (audit log) commands interface
@@ -286,6 +288,10 @@ impl AppConnection {
             Arc::new(DbSupg003Queries::new(db.connection().clone()));
         let supg003_commands: Arc<dyn Supg003Commands> =
             Arc::new(Supg003CommandExecutor::new(supg003_queries, db.connection().clone()));
+        let supg006_commands: Arc<dyn Supg006Commands> = Arc::new(Supg006CommandExecutor::new(
+            Arc::new(DbSupg006Queries::new(db.connection().clone())),
+            db.connection().clone(),
+        ));
 
         // SUPG004 Commands: accounts are created at the identity provider (Kratos) too
         let supg004_queries: Arc<dyn Supg004Queries> =
@@ -394,6 +400,7 @@ impl AppConnection {
             supg001_commands,
             supg002_commands,
             supg003_commands,
+            supg006_commands,
             supg004_commands,
             alpg000_commands,
             alpg001_commands,
@@ -497,6 +504,12 @@ impl axum::extract::FromRef<AppConnection> for Arc<dyn AccessControl> {
 impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg001Commands> {
     fn from_ref(conn: &AppConnection) -> Self {
         conn.supg001_commands.clone()
+    }
+}
+
+impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg006Commands> {
+    fn from_ref(conn: &AppConnection) -> Self {
+        conn.supg006_commands.clone()
     }
 }
 

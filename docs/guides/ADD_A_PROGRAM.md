@@ -1,135 +1,135 @@
-# คู่มือ: เพิ่มโปรแกรม (หน้าจอ + API) ใหม่ตั้งแต่ต้นจนจบ
+# Guide: Add a New Program (Screen + API) End-to-End
 
-ตัวอย่างอ้างอิงที่ใช้ไล่ดูโค้ดจริงได้: **ALPG001 Process Monitor** (อ่านตาราง + ปุ่มสั่งงาน, มี test ครบ) และ **DBPG005 Geography** (CRUD เต็มรูป)
-สมมติจะเพิ่มโปรแกรม `XXPGNNN` ในระบบ `XX` — แทนที่ชื่อด้วยของจริงตลอดคู่มือ
+Reference implementations you can inspect in the codebase: **ALPG001 Process Monitor** (table read + action button, with complete tests) and **DBPG005 Geography** (full CRUD).
+Suppose we are adding program `XXPGNNN` under system `XX` — replace those placeholders with your actual identifiers throughout this guide.
 
-> กฎที่ห้ามละเมิดอยู่ที่ [`AGENTS.md`](../../AGENTS.md) (ชั้น dependency, ห้ามชื่อไฟล์ generic เช่น `service.rs`/`handler.rs`/`utils.rs`, test อยู่ใน `tests/`, UUIDv7, `{param}` ของ Axum 0.8)
+> Invariant rules live in [`AGENTS.md`](../../AGENTS.md) (dependency layers, strict ban on generic filenames such as `service.rs`/`handler.rs`/`utils.rs`, tests strictly inside `tests/`, UUIDv7, Axum 0.8 `{param}` syntax).
 
-## 0. ตัดสินใจก่อนเขียน
+## 0. Decisions Before Coding
 
-| เรื่อง | ค่าที่ต้องเลือก |
+| Item | Value to Choose |
 |---|---|
-| รหัสโปรแกรม | `XXPGNNN` — `XX` = ระบบ 2 ตัวอักษร, `PG` = page, `NNN` = เลขลำดับ (ใหญ่/ตัวพิมพ์ใหญ่) |
-| path เว็บ | `/xx/xxpgnnn` (ตัวพิมพ์เล็ก — เมนูใช้ค่านี้เป็นเส้นทางหลักของโปรแกรม) |
-| path API | `/api/v1/xx/xxpgnnn/...` — **ต้องมี segment `xxpgnnn`** เพราะ audit หา "โปรแกรม" ของ request จาก segment นี้ (`infrastructure/src/middleware/audit/audit_target.rs`) |
-| สิทธิ์ | `READ` (ดู), `WRITE` (เพิ่ม/แก้/ลบ/สั่งงาน), `APPROVE` (อนุมัติ) — ตรวจที่ router ด้วย `require(&access, &user, "XXPGNNN", PermissionAction::…)` |
-| ขอบเขตข้อมูล | ถ้างานผูกกับองค์กร/บริษัท/สาขา/แผนก ใช้ `require_in` + `ScopeTarget` (ดู DBPG003 / `access_scope_test.rs`) |
-| เมนู | โปรแกรมอยู่ใต้โฟลเดอร์ (เช่น `ALPG000_GROUP`) หรืออยู่เดี่ยว; ถ้าเป็นหน้าของ "ตัวผู้ใช้เอง" (รายงานของฉัน, แจ้งเตือน) ให้เข้าเมนู dropdown ผู้ใช้ — ดู `USER_MENU_PROGRAMS` ใน `layouts/master_navigation.rs` |
+| Program Code | `XXPGNNN` — `XX` = 2-letter system code, `PG` = page, `NNN` = sequence number (uppercase) |
+| Web Path | `/xx/xxpgnnn` (lowercase — the menu uses this as the primary route for the program) |
+| API Path | `/api/v1/xx/xxpgnnn/...` — **must contain the `xxpgnnn` segment** because the audit middleware resolves the request's target program from this segment (`infrastructure/src/middleware/audit/audit_target.rs`) |
+| Permissions | `READ` (view), `WRITE` (create/update/delete/trigger action), `APPROVE` (approve) — enforced in the router via `require(&access, &user, "XXPGNNN", PermissionAction::…)` |
+| Data Scope | If actions are scoped to an organization/company/branch/department, use `require_in` + `ScopeTarget` (see `DBPG003` / `access_scope_test.rs`) |
+| Menu Placement | Placed under a parent folder (e.g. `ALPG000_GROUP`) or top-level; if the screen belongs to the "current user" (My Reports, Notifications), register it in the user profile dropdown — see `USER_MENU_PROGRAMS` in `layouts/master_navigation.rs` |
 
-## 1. ฐานข้อมูล
+## 1. Database
 
-1. เพิ่มตารางใน [`sql/01_ysql.sql`](../../sql/README.md) — ชื่อ `xx_<ชื่อ>`, PK เป็น `uuid` (สร้างด้วย **UUIDv7** ที่ฝั่ง Rust: `Uuid::now_v7()`), มี `row_version bigint NOT NULL DEFAULT 1` (optimistic locking) ถ้าแก้ไขได้
-   - วางตาราง **ก่อน** บล็อก `DO $$ … al_capture_change …` ท้ายไฟล์ → ได้ trigger เก็บ before/after ลง audit ให้อัตโนมัติ
-   - ตารางที่เพิ่มทีหลังใน migration ต้อง `CREATE TRIGGER "al_capture_change" …` เอง (ดู [`sql/README.md`](../../sql/README.md) หัวข้อ "เปลี่ยน schema")
-2. ถ้าตารางสำคัญจนเมื่อไม่มีแล้วต้องบังคับสร้างฐานใหม่ ให้เพิ่มชื่อตารางใน guard ของ `kube/arch/utils/db-seed.sh`
-3. สร้าง entity: ฐานต้องมีตารางแล้ว (`make seed` หรือ `make bootstrap`) แล้วรัน `make gen-entities` → ไฟล์ `domain/src/entity/xx_<ชื่อ>.rs` + `mod.rs`/`prelude.rs`
-   - คำสั่งนี้ **สร้างทุก entity ใหม่ทั้งหมด**: ดู diff ทุกครั้ง อย่าให้ไฟล์เดิมที่ปรับมือถูกเขียนทับ
+1. Add the table to [`sql/01_ysql.sql`](../../sql/README.md) — named `xx_<name>`, PK `uuid` (generated as **UUIDv7** in Rust via `Uuid::now_v7()`), with `row_version bigint NOT NULL DEFAULT 1` (optimistic locking) if mutable.
+   - Place the table **before** the trailing `DO $$ … al_capture_change …` block at the bottom of `01_ysql.sql` so it automatically receives the before/after audit capture trigger.
+   - Tables added later via migration files must explicitly create the `al_capture_change` trigger (see [`sql/README.md`](../../sql/README.md), "Changing the Schema").
+2. If the table is required for the app to boot and its absence should force a database recreation hint, add the table name to the guard in `kube/arch/utils/db-seed.sh`.
+3. Generate Sea-ORM entities: ensure the table exists in the database (`make seed` or `make bootstrap`), then run `make gen-entities` → generates `domain/src/entity/xx_<name>.rs` + updates `mod.rs`/`prelude.rs`.
+   - This command **regenerates all entities**: always inspect `git diff` to ensure custom edits in existing entity files are not overwritten.
 
-## 2. ชั้น application — `application/master/src/features/xx/xxpgnnn/`
+## 2. Application Layer — `application/master/src/features/xx/xxpgnnn/`
 
 ```text
 features/xx/xxpgnnn/
-├── mod.rs                      # re-export + คำอธิบายโปรแกรม (รหัส, API, แหล่งข้อมูล)
-├── errors/mod.rs               # enum Xxpgnnn Error (thiserror): Validation / NotFound / Conflict / Unavailable / Internal
-├── models/                     # DTO + filter query + (re-export entity เป็น *Model)
+├── mod.rs                      # Re-exports + program doc comment (code, API, data source)
+├── errors/mod.rs               # Enum XxpgnnnError (thiserror): Validation / NotFound / Conflict / Unavailable / Internal
+├── models/                     # DTOs + filter query structs + (re-exported entities as *Model)
 ├── commands/
-│   ├── mod.rs                  # trait XxpgnnnCommands  ← router เรียกผ่านตัวนี้เท่านั้น
-│   ├── xxpgnnn_executor.rs     # struct …CommandExecutor ที่ impl trait (บาง ๆ: เรียก <action>.rs)
-│   └── <action>_<target>.rs    # ตรรกะแต่ละ action (list_processes.rs, reprocess_process.rs …)
+│   ├── mod.rs                  # Trait XxpgnnnCommands  ← routers call exclusively through this trait
+│   ├── xxpgnnn_executor.rs     # Struct …CommandExecutor implementing the trait (thin facade delegating to <action>.rs)
+│   └── <action>_<target>.rs    # Per-action business logic (list_processes.rs, reprocess_process.rs …)
 └── queries/
-    ├── mod.rs                  # trait XxpgnnnQueries
-    └── db_xxpgnnn_queries.rs   # Sea-ORM ตรง ๆ (ไม่ต้องมี repository เพิ่ม)
+    ├── mod.rs                  # Trait XxpgnnnQueries
+    └── db_xxpgnnn_queries.rs   # Direct Sea-ORM queries (no redundant repository layer)
 ```
 
-- ลงทะเบียน module ใน `features/xx/mod.rs` (`pub mod xxpgnnn;`) — ถ้าต้องการ re-export ที่ `features/mod.rs` ด้วย
-- กฎการทำงาน: validate/normalize ใน `commands` (ดู `filter_rules.rs`), query ล้วนอยู่ใน `queries`, **ห้าม import `handler/*` หรือ driver ตรง ๆ** — ต้องใช้ port จาก `application-core` (เช่น `EventService`, `CacheService`)
-- ทำให้ทดสอบง่าย: executor รับ `Arc<dyn …Queries>` (+ port อื่นผ่าน `with_xxx(...)`) — ใน test ใช้ mock ในหน่วยความจำ
-- ถ้าอ่านข้อมูลที่ "อ่านบ่อยแก้น้อย" ให้ห่อด้วยแคช (หัวข้อ 6)
-- **Optimistic locking (command แก้ไข)**: `Update…Command` ต้องมี `row_version: i64` (ค่าที่ฟอร์มโหลดมา) แล้วบันทึกผ่าน helper กลางตัวเดียว — ห้ามเทียบเวอร์ชันหรือ `+ 1` เอง:
+- Register the module in `features/xx/mod.rs` (`pub mod xxpgnnn;`) — and re-export in `features/mod.rs` if needed.
+- Responsibilities: validate and normalize inputs in `commands` (e.g. `filter_rules.rs`), keep pure data access in `queries`, and **never import `handler/*` or concrete infrastructure drivers directly** — depend on ports from `application-core` (e.g. `EventService`, `CacheService`).
+- Design for testability: the executor accepts `Arc<dyn …Queries>` (+ optional ports via `.with_xxx(...)`) so unit tests can inject in-memory mocks.
+- If a query reads data that is "read frequently, modified rarely", wrap it with the read cache (see Section 6).
+- **Optimistic locking (update commands)**: `Update…Command` must carry `row_version: i64` (the version loaded by the form) and save through the shared helper — never compare versions or increment `+ 1` manually:
   ```rust
   update_versioned(&txn, am, (db_x::Column::Id, db_x::Column::RowVersion), id, cmd.row_version).await?;
   ```
-  (`crate::features::optimistic_update`) ตั้งเฉพาะคอลัมน์ที่เปลี่ยนบน `am` helper ส่ง `UPDATE … SET …, row_version = row_version + 1 WHERE id = ? AND row_version = ?` ถ้าไม่มีแถวตรง → `DbErr::RecordNotUpdated` ต้องให้ `From<DbErr>` ของ errors map เป็น `VersionConflict` (ทำไว้แล้วในทุกโปรแกรม; โปรแกรมใหม่เพิ่ม arm `DbErr::RecordNotUpdated => Self::VersionConflict`) และ router ตอบ **412 `VERSION_CONFLICT`** เขียนแถวหลักก่อนแถวลูกใน transaction เดียวกัน
+  (`crate::features::optimistic_update`). Set only the modified columns on `am`; the helper executes `UPDATE … SET …, row_version = row_version + 1 WHERE id = ? AND row_version = ?`. If no row matches, it returns `DbErr::RecordNotUpdated`. Ensure your feature error's `From<DbErr>` maps `DbErr::RecordNotUpdated => Self::VersionConflict` (already standard across existing programs), and the router maps `VersionConflict` to **HTTP 412 `VERSION_CONFLICT`**. Always update the parent row before child rows within the same transaction.
 
-## 3. ชั้น API — `handler/api/master/`
+## 3. API Layer — `handler/api/master/`
 
-1. `src/routers/xxpgnnn_router.rs` — สร้างตาม `alpg001_router.rs`:
-   - `pub const XXPGNNN_PATH: &str = "/xx/xxpgnnn";` และ `const PROGRAM: &str = "XXPGNNN";`
-   - handler รับ `State(commands): State<Arc<dyn XxpgnnnCommands>>` + `State(access): State<Arc<dyn AccessControl>>` + `Extension(user)` + `wire: WireFormat` → ตรวจ `require(...)` เป็นอย่างแรก → ตอบด้วย `wire.respond(...)` (เจรจา JSON/CBOR ให้เอง)
-   - `ApiError` ที่ `impl IntoResponse` แปลง error ของ feature เป็น HTTP (400/404/409/503/500) ด้วยรูปแบบ `{success, code, message}`
-   - ส่งออก `xxpgnnn_routes()` และ `xxpgnnn_routes_with_state(state)` (ตัวหลังไว้ให้ test)
-   - route แบบมีพารามิเตอร์ใช้ `/{id}` (Axum 0.8) ไม่ใช่ `/:id`
-2. ลงทะเบียน: `routers/mod.rs` (`pub mod` + `pub use`), `routers/base_router.rs` (**ต้อง `.nest` สองที่**: ใน `api_router` และใน root router ที่ขึ้นต้น `/api/v1`)
-3. `connection.rs`: เพิ่มฟิลด์ `xxpgnnn_commands: Arc<dyn XxpgnnnCommands>`, สร้าง executor (ต่อ `.with_cache(caches.clone())` ถ้ามีแคช), ใส่ใน `Self { … }` และเพิ่ม `impl FromRef<AppConnection> for Arc<dyn XxpgnnnCommands>`
-4. การเขียนข้อมูล: ใช้ `actor.user_id` เป็น `change_by`; trigger audit จะจับ before/after เองเมื่อ API ตั้ง actor ไว้ (`infrastructure::track_actor`)
-5. ถ้ามีการเขียนข้อมูลที่ถูกแคชไว้ที่อื่น → เพิ่มกฎใน `src/cache_policy.rs` (ข้อ 6)
+1. `src/routers/xxpgnnn_router.rs` — model after `alpg001_router.rs`:
+   - Define `pub const XXPGNNN_PATH: &str = "/xx/xxpgnnn";` and `const PROGRAM: &str = "XXPGNNN";`.
+   - Handlers extract `State(commands): State<Arc<dyn XxpgnnnCommands>>` + `State(access): State<Arc<dyn AccessControl>>` + `Extension(user)` + `wire: WireFormat` → check `require(...)` first → return responses via `wire.respond(...)` (automatically negotiates JSON/CBOR).
+   - Implement `IntoResponse` for the feature's `ApiError` to map domain errors to HTTP status codes (`400`/`404`/`409`/`412`/`503`/`500`) with `{success, code, message}`.
+   - Expose `xxpgnnn_routes()` and `xxpgnnn_routes_with_state(state)` (the latter for router tests).
+   - Use Axum 0.8 path parameter syntax `/{id}`, never `/:id`.
+2. Register the router: `routers/mod.rs` (`pub mod` + `pub use`) and `routers/base_router.rs` (**must `.nest` in two places**: inside `api_router` and inside the root router under `/api/v1`).
+3. `connection.rs`: add field `xxpgnnn_commands: Arc<dyn XxpgnnnCommands>`, instantiate the executor (chaining `.with_cache(caches.clone())` if cached), include it in `Self { … }`, and implement `FromRef<AppConnection> for Arc<dyn XxpgnnnCommands>`.
+4. Data mutations: pass `actor.user_id` as `change_by`; the database audit trigger automatically captures before/after snapshots when the API sets the session actor (`infrastructure::track_actor`).
+5. If this program mutates data cached under any namespace → add an invalidation rule in `src/cache_policy.rs` (see Section 6).
 
-## 4. Test (ห้ามเขียนใน `src/`)
+## 4. Tests (Never Inline Inside `src/`)
 
-| ที่ไหน | ทดสอบอะไร |
+| Location | What to Test |
 |---|---|
-| `application/master/tests/xxpgnnn_test.rs` | กฎ validate/normalize, ผลของ executor บน mock queries, กรณีผิดพลาด |
-| `handler/api/master/tests/xxpgnnn_router_test.rs` | สถานะ HTTP: 200/202, 400, 403 (ไม่มีสิทธิ์/มีแค่ READ), 404, 409, 503 โดยใช้ `…_routes_with_state` + `MockAccess` |
+| `application/master/tests/xxpgnnn_test.rs` | Validation/normalization rules, executor behavior against mock queries, error cases |
+| `handler/api/master/tests/xxpgnnn_router_test.rs` | HTTP status codes: `200`/`202`, `400`, `403` (missing permission / READ-only), `404`, `409`, `503` using `…_routes_with_state` + `MockAccess` |
 
-รัน: `cargo test -p application-master --test xxpgnnn_test` และ `cargo test -p api-master --test xxpgnnn_router_test`
-(ตัวอย่างครบ: `alpg001_test.rs`, `alpg001_router_test.rs`)
+Run: `cargo test -p application-master --test xxpgnnn_test` and `cargo test -p api-master --test xxpgnnn_router_test`
+(Complete reference examples: `alpg001_test.rs`, `alpg001_router_test.rs`).
 
-## 5. Seed — โปรแกรมเข้าเมนู + สิทธิ์ + ข้อความ
+## 5. Seed Data — Menu Catalogue + Permissions + i18n Labels
 
-1. **`sql/52_program_catalogue.sql`**: เพิ่มแถว `db_program` (id คงที่ รูปแบบ `019ca1ed-0000-7000-8003-…`, `code`, `path`, `icon`, `sort_order`, `program_id` = โฟลเดอร์แม่) และชื่อ th/en ใน `db_program_label`
-   - ชื่อ `icon` ต้องมีใน `handler/web/package/src/layout/nav_icons.rs` (ไม่มี → ขึ้นเป็นจุด) เพิ่มได้ที่ตารางนั้น
-2. **สิทธิ์**: ไม่ต้องเขียน — `sql/53_admin_seed.sql` แจก READ/WRITE/APPROVE ให้กลุ่ม ADMIN **ทุกโปรแกรมที่ active** ทุกครั้งที่รัน; กลุ่มอื่นกำหนดที่หน้า SUPG003 (permission matrix)
-3. **ข้อความหน้าจอ**: ไฟล์ใหม่ `sql/NN_i18n_xxpgnnn.sql` (NN = เลขถัดไป, idempotent ด้วย `ON CONFLICT DO NOTHING`, id แบบ v7 — คัดลอกบล็อก `INSERT … SELECT` จาก `sql/80_i18n_alpg001.sql`) ใส่ key `xxpgnnn.*` ทั้ง `th` และ `en`
-4. `make seed` แล้วเช็ก: `SELECT code FROM arch.db_program WHERE code='XXPGNNN'`
+1. **`sql/52_program_catalogue.sql`**: insert a row into `db_program` (fixed UUID in the `019ca1ed-0000-7000-8003-…` range, `code`, `path`, `icon`, `sort_order`, `program_id` = parent folder) and Thai/English labels in `db_program_label`.
+   - The `icon` name must exist in `handler/web/package/src/layout/nav_icons.rs` (unknown icons render as a dot); add new icon mappings there if needed.
+2. **Permissions**: no manual SQL needed for `ADMIN` — `sql/53_admin_seed.sql` automatically grants `READ`/`WRITE`/`APPROVE` on **every active program** to the `ADMIN` group on each run; other groups can be configured in the `SUPG003` Permission Matrix UI.
+3. **UI translations**: create a new file `sql/NN_i18n_xxpgnnn.sql` (`NN` = next available number, idempotent via `ON CONFLICT DO NOTHING`, UUIDv7 IDs — copy the `INSERT … SELECT` pattern from `sql/80_i18n_alpg001.sql`) defining `xxpgnnn.*` keys for both `th` and `en`.
+4. Run `make seed` and verify: `SELECT code FROM arch.db_program WHERE code='XXPGNNN'`.
 
-## 6. แคชและการล้างแคช (เมื่อเกี่ยวข้อง)
+## 6. Read Cache & Invalidation (When Applicable)
 
-- อ่านบ่อย/แก้น้อย/ทุกคนเห็นเหมือนกัน → ห่อการอ่านใน executor: `caches.ns(cache_ns::REF).through_key(key, cache_ttl::REF, || …)` (ตัวอย่าง `dbpg005_executor.rs`)
-- เป็นข้อมูลที่เปลี่ยนบ่อย/ขึ้นกับผู้ใช้/ต้องสดเสมอ → **ไม่แคช**
-- โปรแกรมที่เขียนข้อมูลซึ่งมี namespace ไหนแคชไว้ → เพิ่มบรรทัดใน `handler/api/master/src/cache_policy.rs` (มี test กันลืมที่ `cache_policy_test.rs`)
-- รายละเอียด: [`docs/architecture/11_VALKEY_READ_CACHE.md`](../architecture/11_VALKEY_READ_CACHE.md)
+- Frequently read / rarely modified / shared across users → wrap reads in the executor: `caches.ns(cache_ns::REF).through_key(key, cache_ttl::REF, || …)` (see `dbpg005_executor.rs`).
+- Frequently changing / user-specific / strictly real-time → **do not cache**.
+- If the program writes data that invalidates any cached namespace → add an entry in `handler/api/master/src/cache_policy.rs` (verified by `cache_policy_test.rs`).
+- Full details: [`docs/architecture/11_VALKEY_READ_CACHE.md`](../architecture/11_VALKEY_READ_CACHE.md).
 
-## 7. ฝั่งเว็บ — `handler/web/application/master/src/pages/xx/xxpgnnn/`
+## 7. Web Frontend — `handler/web/application/master/src/pages/xx/xxpgnnn/`
 
 ```text
 pages/xx/xxpgnnn/
-├── mod.rs                    # pub use screens::Xxpgnnn Screen as Xxpgnnn Page;
-├── models/xxpgnnn_dto.rs     # DTO (Clone, Debug, PartialEq, Serialize, Deserialize)
-├── services/xxpgnnn_service.rs      # เรียก HTTP (HttpClient) — แปลง 403/409/503 เป็นข้อความ
-├── providers/xxpgnnn_context.rs     # context (Leptos signals) + hook use_xxpgnnn()
-├── components/<widget>.rs           # UI ย่อยของหน้านี้
-└── screens/xxpgnnn_screen.rs        # ประกอบหน้า: PageContainer/PageHeader + provide_…_context()
+├── mod.rs                           # pub use screens::XxpgnnnScreen as XxpgnnnPage;
+├── models/xxpgnnn_dto.rs            # DTOs (Clone, Debug, PartialEq, Serialize, Deserialize)
+├── services/xxpgnnn_service.rs      # HTTP calls (HttpClient) — maps 403/409/503 to user messages
+├── providers/xxpgnnn_context.rs     # Reactive context (Leptos signals) + use_xxpgnnn() hook
+├── components/<widget>.rs           # Presentational UI widgets isolated to this page
+└── screens/xxpgnnn_screen.rs        # Page assembly: PageContainer/PageHeader + provide_…_context()
 ```
 
-- **ตารางรายการใช้ `web_package::ui::component::DataTable` เสมอ** (ค้นหา, รีเฟรช, ตัวกรอง, แบ่งหน้า) — ห้ามสร้าง Card+Table เอง
-- ลงทะเบียน: `pages/xx/mod.rs`, `pages/mod.rs` (`pub use …Page`), `routes/master_routes.rs` (`use` + `<Route path=path!("xx/xxpgnnn") view=XxpgnnnPage />`)
-- ข้อความทุกจุดใช้ `t_or("xxpgnnn.key", "ข้อความไทยสำรอง")` ให้ตรงกับ key ใน seed i18n
-- ปุ่มที่ต้องมีสิทธิ์: ซ่อน/ปิดตาม `use_access()` (แอปรู้สิทธิ์จาก `/api/v1/access/me`) แต่ **API ตรวจซ้ำเสมอ** — ห้ามเชื่อแค่ฝั่งเว็บ
-- ช่วงวันที่ใช้ `DateRangePicker`, dropdown ใช้ `dismiss_on_outside` (อย่าทำชั้นโปร่งใสเต็มจอ: ใน topbar มี `backdrop-blur` ทำให้ `fixed` คลุมแค่ topbar)
-- ดีไซน์: ใช้โทเคนสีของธีม (`bg-primary`, `text-muted-foreground`, `border-border` …) เพื่อให้ dark mode ทำงาน
+- **Always use `web_package::ui::component::DataTable` for list tables** (search, refresh, filter chips, pagination) — never hand-roll a custom `Card` + `Table` shell.
+- Register the page: `pages/xx/mod.rs`, `pages/mod.rs` (`pub use …Page`), and `routes/master_routes.rs` (`use` + `<Route path=path!("xx/xxpgnnn") view=XxpgnnnPage />`).
+- Localize all user-facing strings with `t_or("xxpgnnn.key", "Fallback text")` matching the keys in your i18n seed file.
+- Permission-gated buttons: hide or disable based on `use_access()` (populated from `/api/v1/access/me`), and **always use confirmation buttons (`ConfirmButton`, `SaveConfirmButton`, `DeleteConfirmButton`) for data-mutating actions**. Note that **the API always re-verifies permissions** — never rely solely on client-side checks.
+- Use `DateRangePicker` for date ranges and `dismiss_on_outside` for dropdowns (do not use a full-screen transparent backdrop inside the topbar, because `backdrop-blur` on the topbar traps `fixed` positioning to the topbar bounds).
+- Styling: use theme color tokens (`bg-primary`, `text-muted-foreground`, `border-border`, …) so dark mode works seamlessly.
 
-## 8. เอกสาร
+## 8. Documentation
 
-- `docs/programs/XXPGNNN_<ชื่อ>.md` (เป้าหมาย, API, สถานะ, ข้อจำกัด) + แถวใน `docs/programs/00_INDEX.md`
+- Create `docs/programs/XXPGNNN_<NAME>.md` (purpose, API endpoints, status, limitations) and add a row to `docs/programs/00_INDEX.md`.
 
-## 9. เช็กลิสต์ก่อนส่ง
+## 9. Pre-Submission Checklist
 
-- [ ] `make seed` ผ่าน และเห็นโปรแกรมในเมนู (ล็อกอิน admin)
-- [ ] `cargo test --workspace --exclude master-app` ผ่าน, ไม่มี warning ใหม่
-- [ ] `cargo check -p master-app --target wasm32-unknown-unknown` ผ่าน
-- [ ] ลองในเบราว์เซอร์จริง: สถานะโหลด/ว่าง/ผิดพลาด, ไม่มีสิทธิ์ (ใช้ `test_abac` ที่มีแค่ READ), ภาษาไทย/อังกฤษ, dark mode, หน้าจอแคบ
-- [ ] ดู audit ที่ ALPG000 ว่า API call + data change ของโปรแกรมใหม่ปรากฏ
-- [ ] เขียนสเปกโปรแกรมใน `docs/programs/` แล้ว
+- [ ] `make seed` succeeds and the program appears in the sidebar menu (when signed in as `admin`)
+- [ ] `cargo test --workspace --exclude master-app` passes with zero new warnings
+- [ ] `cargo check -p master-app --target wasm32-unknown-unknown` passes
+- [ ] Tested in a real browser: loading/empty/error states, permission enforcement (using `test_abac` with READ-only access), Thai/English switching, dark mode, and narrow viewport
+- [ ] Verified in `ALPG000` (Audit Log) that API calls and data changes for the new program are recorded
+- [ ] Added the program specification under `docs/programs/`
 
-## 10. กับดักที่เจอมาแล้วในโปรเจกต์นี้
+## 10. Common Pitfalls Encountered in This Project
 
-| อาการ | สาเหตุ / วิธีแก้ |
+| Symptom | Cause / Fix |
 |---|---|
-| เมนูไม่ขึ้น | ลืม `make seed`; หรือไม่มี READ ในกลุ่มของผู้ใช้; หรือโปรแกรม `active=false` (เมนูถูกแคช 60 วินาที — `make cache-flush`) |
-| API 404 ทั้งที่ลงทะเบียนแล้ว | ลืม `.nest` ตัวที่สองของ root router (`/api/v1…`); ผ่าน Trunk proxy ให้ใช้ path ที่ขึ้นต้น `/api/v1/` |
-| route `/` ของ router ย่อยโดน proxy ตีความผิด | ตั้งเป็น `/items` แทน `/` (เจอกับ api-notification) |
-| คลาส `bg-primary/10`, `border-border/60` ไม่แสดงสี | สีธีมเป็นตัวแปร `var(--…)` ที่ Tailwind 3 ใส่ alpha ให้ไม่ได้ → ใช้ `bg-[color-mix(in_oklch,var(--primary)_12%,transparent)]` |
-| คลาส Tailwind ที่ประกอบด้วย `format!("w-{n}")` ไม่มีผล | CSS ถูกคอมไพล์จากข้อความที่ปรากฏใน `.rs` ตรง ๆ: ต้องเขียนชื่อคลาสเต็ม (`"w-4"`, `"w-8"`) หรือใส่ใน `safelist` ของ `tailwind.config.js` |
-| เว็บยังเป็นของเก่า | trunk ยัง build ไม่เสร็จ (wasm ใหญ่) หรือแคชเบราว์เซอร์ — hard reload |
-| เพิ่ม `web-sys` API แล้วคอมไพล์ไม่ผ่าน | ต้องเปิด feature ใน `Cargo.toml` ของ `handler/web/package` และ `handler/web/application/master` |
-| `row_version` ไม่ตรง (412 `VERSION_CONFLICT`) | ฟอร์มแก้ไขต้องส่ง `row_version` ที่อ่านมาล่าสุดกลับ; command ต้องบันทึกผ่าน `update_versioned` (หัวข้อ 2) และ `From<DbErr>` ต้อง map `RecordNotUpdated` เป็น `VersionConflict` |
+| Menu item does not appear | Forgot to run `make seed`; user's group lacks `READ` permission; or program has `active=false` (sidebar menu is cached for 60s — run `make cache-flush`) |
+| API returns 404 despite router registration | Forgot the second `.nest` in `base_router.rs` under `/api/v1…`; requests via Trunk proxy must start with `/api/v1/` |
+| Sub-router `/` route is misinterpreted by proxy | Use `/items` instead of `/` (encountered in `api-notification`) |
+| `bg-primary/10` or `border-border/60` renders no color | Theme colors use CSS variables `var(--…)` where Tailwind 3 alpha modifiers do not work → use `bg-[color-mix(in_oklch,var(--primary)_12%,transparent)]` |
+| Dynamically formatted Tailwind classes (`format!("w-{n}")`) have no effect | Tailwind scans source files statically for complete class names: write full literals (`"w-4"`, `"w-8"`) or add them to `safelist` in `tailwind.config.js` |
+| Web UI still shows old code | Trunk is still compiling the WASM bundle or the browser cached it — wait for build completion and hard reload (`Ctrl+Shift+R`) |
+| Adding a `web-sys` API fails to compile | Enable the corresponding `web-sys` feature flag in `Cargo.toml` of `handler/web/package` and/or `handler/web/application/master` |
+| `row_version` mismatch (`412 VERSION_CONFLICT`) | Edit forms must send back the latest `row_version` loaded from the API; commands must save via `update_versioned` (Section 2) and map `DbErr::RecordNotUpdated` to `VersionConflict` |

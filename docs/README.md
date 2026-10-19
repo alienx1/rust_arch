@@ -2,14 +2,14 @@
 
 This directory contains technical documentation and architecture specifications for the platform.
 
-## Guides (ลงมือทำ)
+## Guides (Hands-On)
 
-- **เริ่มที่นี่**: [`README.md`](../README.md) (ที่ root)
-- **เพิ่มโปรแกรม/หน้าจอใหม่**: [`guides/ADD_A_PROGRAM.md`](./guides/ADD_A_PROGRAM.md)
-- **เพิ่ม service ใหม่**: [`guides/ADD_A_SERVICE.md`](./guides/ADD_A_SERVICE.md)
-- **แก้ปัญหาที่เจอบ่อย**: [`guides/TROUBLESHOOTING.md`](./guides/TROUBLESHOOTING.md)
-- **ก่อนขึ้นระบบจริง**: [`guides/PRODUCTION_CHECKLIST.md`](./guides/PRODUCTION_CHECKLIST.md)
-- **เปลี่ยน schema ฐานข้อมูล**: [`../sql/README.md`](../sql/README.md)
+- **Start Here**: [`README.md`](../README.md) (at repo root)
+- **Add a New Program / Screen**: [`guides/ADD_A_PROGRAM.md`](./guides/ADD_A_PROGRAM.md)
+- **Add a New Service**: [`guides/ADD_A_SERVICE.md`](./guides/ADD_A_SERVICE.md)
+- **Troubleshooting Common Issues**: [`guides/TROUBLESHOOTING.md`](./guides/TROUBLESHOOTING.md)
+- **Production Readiness Checklist**: [`guides/PRODUCTION_CHECKLIST.md`](./guides/PRODUCTION_CHECKLIST.md)
+- **Database Schema Changes**: [`../sql/README.md`](../sql/README.md)
 
 ## Architecture Specifications (Obsidian-ready)
 
@@ -25,9 +25,9 @@ All architectural documentation is organized modularly under [`docs/architecture
 - **Event Streaming & Observability**: [`docs/architecture/07_EVENT_STREAMING_OBSERVABILITY.md`](./architecture/07_EVENT_STREAMING_OBSERVABILITY.md)
 - **Disaster Recovery & Resiliency**: [`docs/architecture/08_DISASTER_RECOVERY_AND_RESILIENCY.md`](./architecture/08_DISASTER_RECOVERY_AND_RESILIENCY.md)
 - **Network, Ports & Security Matrix**: [`docs/architecture/09_NETWORK_PORTS_AND_SECURITY_MATRIX.md`](./architecture/09_NETWORK_PORTS_AND_SECURITY_MATRIX.md)
-- **Valkey Read Cache**: [`docs/architecture/11_VALKEY_READ_CACHE.md`](./architecture/11_VALKEY_READ_CACHE.md)
 - **Project Structure & Code Style Guide**: [`docs/architecture/10_PROJECT_STRUCTURE_AND_CODE_STYLE.md`](./architecture/10_PROJECT_STRUCTURE_AND_CODE_STYLE.md)
 - **Valkey Read Cache & Invalidation**: [`docs/architecture/11_VALKEY_READ_CACHE.md`](./architecture/11_VALKEY_READ_CACHE.md)
+- **View Scope & Company/Branch Switcher**: [`docs/architecture/12_VIEW_SCOPE_COMPANY_SWITCHER.md`](./architecture/12_VIEW_SCOPE_COMPANY_SWITCHER.md)
 - **AI Agent Engineering Standards**: [`AGENTS.md`](../AGENTS.md)
 
 ## Program & Screen Specifications (Obsidian-ready)

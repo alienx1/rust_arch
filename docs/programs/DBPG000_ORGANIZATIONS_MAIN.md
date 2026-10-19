@@ -5,7 +5,6 @@ system_code: "DB"
 module_code: "DBMT"
 route_path: "/db/dbpg000"
 icon: "ApartmentOutlined"
-title_th: "หน้าหลักองค์กรและบริษัท"
 title_en: "Organizations & Companies (Main)"
 parent_group: null
 status: "Implemented"
@@ -18,31 +17,30 @@ tags:
   - screen
 ---
 
-# 🏢 DBPG000 - หน้าหลักองค์กรและบริษัท (Organizations & Companies)
+# 🏢 DBPG000 - Organizations & Companies (Main Screen)
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `DBPG000`
-> - **ชื่อภาษาไทย**: หน้าหลักองค์กรและบริษัท
 > - **Title (EN)**: Organizations & Companies (Main Screen)
 > - **Route Path**: `/db/dbpg000`
 > - **Icon**: `ApartmentOutlined` (`icondata_ai`)
-> - **System**: `DB` (ฐานข้อมูล / Database)
-> - **Module**: `DBMT` (ข้อมูลหลัก / Master Data)
+> - **System**: `DB` (Database)
+> - **Module**: `DBMT` (Master Data)
 > - **Detail Sub-pages**:
->   - [[DBPG001_ORGANIZATIONS#หน้า-1-dbdbpg001org-จัดการองค์กร-org|/db/dbpg001/org (สร้าง / แก้ไข Org)]]
->   - [[DBPG001_ORGANIZATIONS#หน้า-2-dbdbpg001company-จัดการบริษัท-company|/db/dbpg001/company (สร้าง / แก้ไข Company)]]
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+>   - [[DBPG001_ORGANIZATIONS#page-1-dbdbpg001org-organization-management-org|/db/dbpg001/org (Create / Edit Organization)]]
+>   - [[DBPG001_ORGANIZATIONS#page-2-dbdbpg001company-company-management-company|/db/dbpg001/company (Create / Edit Company)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
 ---
 
-## 🎯 1. ภาพรวมหน้าจอ (Screen Overview)
-หน้าจอศูนย์กลางสำหรับค้นหาและบริหารจัดการโครงสร้างองค์กรและบริษัท (Organizations & Companies Dashboard) ประกอบด้วย:
-1. **Dropdown สำหรับเลือกองค์กร (Select Org)** เพื่อกรองดูข้อมูลเฉพาะกลุ่มบริษัทในเครือ
-2. **Search Bar สำหรับค้นหาบริษัท (Search Company)** ค้นหาแบบ Real-time
-3. **Table แสดงรายชื่อบริษัท (Company Table)** แสดงสถานะ, สกุลเงิน, เลขผู้เสียภาษี
-4. **Action Buttons** สำหรับเปิดไปยังหน้า Detail 2 หน้า:
-   - `/db/dbpg001/org` สำหรับ Create / Update Organization
-   - `/db/dbpg001/company` สำหรับ Create / Update Company
+## 🎯 1. Screen Overview
+Central hub for searching and managing organizations and affiliated companies (Organizations & Companies Dashboard), consisting of:
+1. **Organization Selector Dropdown (Select Org)** to filter companies belonging to a specific corporate group.
+2. **Real-Time Company Search Bar** for filtering companies across multiple fields.
+3. **Company Data Table** displaying status, primary currency, and registration/tax identifiers.
+4. **Action Buttons** navigating to two dedicated detail screens:
+   - `/db/dbpg001/org` to Create / Update an Organization
+   - `/db/dbpg001/company` to Create / Update a Company
 
 ---
 
@@ -57,102 +55,102 @@ tags:
 ### 2.3 ASCII Layout Wireframe
 ```
 +----------------------------------------------------------------------------------------------------+
-|  🏢 จัดการองค์กรและบริษัท (Organizations & Companies)                             [+ เพิ่ม Org] [+ เพิ่ม Company] |
+|  🏢 Organizations & Companies                                           [+ Add Org] [+ Add Company] |
 +----------------------------------------------------------------------------------------------------+
-|  [ 🏢 เลือกองค์กร: [ บริษัท แม่ เอบีซี โฮลดิ้ง จำกัด (ORG001)  ▼ ] ] [ ✏️ แก้ไข Org ]                      |
+|  [ 🏢 Organization: [ ABC Holding Co., Ltd. (ORG001)              ▼ ] ] [ ✏️ Edit Org ]             |
 |                                                                                                    |
-|  🔍 ค้นหาบริษัท: [ พิมพ์ชื่อบริษัท, รหัสบริษัท, หรือ Tax ID...                                  🔍 ] |
+|  🔍 Search Company: [ Type company name, code, or registration number...                       🔍 ] |
 +----------------------------------------------------------------------------------------------------+
-|  ตารางรายชื่อบริษัท (Companies)                                                         พบ 3 บริษัท  |
+|  Companies                                                                        Found 3 companies |
 +------------+---------------------------+-----------------------+-------------+----------+---------+--------+
-| รหัสบริษัท | ชื่อบริษัท (ไทย)            | ชื่อบริษัท (EN)        | (Tax ID อยู่ใน contacts) | สกุลเงิน | สถานะ   | จัดการ |
+| Code       | Company Name (TH)         | Company Name (EN)     | (Tax ID in contacts)   | Currency| Status | Actions|
 +------------+---------------------------+-----------------------+-------------+----------+---------+--------+
-| CMP001     | บจก. เอบีซี เทรดดิ้ง      | ABC Trading Co., Ltd. | 01055500001 | THB (฿)  | Active  | [✏️] [👁️] |
-| CMP002     | บจก. เอบีซี โลจิสติกส์    | ABC Logistics Ltd.    | 01055500002 | THB (฿)  | Active  | [✏️] [👁️] |
-| CMP003     | บจก. เอบีซี ดิจิทัล โซลูชั่น| ABC Digital Solutions | 01055500003 | THB (฿)  | Inactive| [✏️] [👁️] |
+| CMP001     | ABC Trading (TH)          | ABC Trading Co., Ltd. | 01055500001 | THB (฿)  | Active  | [✏️] [👁️] |
+| CMP002     | ABC Logistics (TH)        | ABC Logistics Ltd.    | 01055500002 | THB (฿)  | Active  | [✏️] [👁️] |
+| CMP003     | ABC Digital Solutions (TH)| ABC Digital Solutions | 01055500003 | THB (฿)  | Inactive| [✏️] [👁️] |
 +------------+---------------------------+-----------------------+-------------+----------+---------+--------+
-|  [ ◀ หน้า 1 จาก 1 ▶ ]                                                      แสดงแถวละ [ 10 ▼ ] รายการ |
+|  [ ◀ Page 1 of 1 ▶ ]                                                         Show [ 10 ▼ ] per page |
 +----------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 📝 3. ขอบเขตและข้อกำหนดการทำงาน (Scope & Requirements)
+## 📝 3. Scope & Requirements
 
-### 3.1 องค์ประกอบบนหน้าจอ (Screen Components)
+### 3.1 Screen Components
 1. **Header Actions**:
-   - `[+ เพิ่มองค์กร]` -> นำทางไปยัง Route `/db/dbpg001/org` (โหมด Create)
-   - `[+ เพิ่มบริษัท]` -> นำทางไปยัง Route `/db/dbpg001/company` (โหมด Create พร้อม Default `org_id` ตามที่เลือกใน Dropdown)
+   - `[+ Add Organization]` -> Navigates to `/db/dbpg001/org` (Create mode).
+   - `[+ Add Company]` -> Navigates to `/db/dbpg001/company` (Create mode, pre-selecting `org_id` from the current dropdown selection).
 
 2. **Org Selector Dropdown**:
-   - ดึงรายการจากตาราง `db_organization` + `db_organization_label` (กรองเฉพาะ active = true)
-   - แสดงรูปแบบ: `<ชื่อองค์กร> (<รหัสองค์กร>)`
-   - ตัวเลือกแรก: `ทั้งหมด (All Organizations)` สำหรับดูภาพรวมบริษัททุกเครือ
-   - ปุ่ม `[✏️ แก้ไข Org]` ข้าง Dropdown: เมื่อคลิกจะพาไปยัง `/db/dbpg001/org?id={selected_org_id}` เพื่อแก้ไขข้อมูลองค์กรที่เลือกทันที
+   - Fetches organizations from `db_organization` + `db_organization_label` (filtered to `active = true`).
+   - Display format: `<Organization Name> (<Code>)`.
+   - Default first option: `All Organizations` to view companies across all corporate groups.
+   - `[✏️ Edit Org]` button next to the dropdown: navigates to `/db/dbpg001/org/{selected_org_id}` to edit the selected organization immediately.
 
 3. **Company Search Bar**:
-   - ค้นหาแบบ Debounced Typeahead (300ms)
-   - รองรับการค้นหาข้ามภาษา (Partial Match):
-     - รหัสบริษัท (`db_company.code`)
-     - ชื่อบริษัทภาษาไทย (`db_company_label.label` TH)
-     - ชื่อบริษัทภาษาอังกฤษ (`db_company_label.label` EN)
-     - เลขประจำตัวผู้เสียภาษี (Tax ID / Registration Number)
+   - Debounced typeahead search (300ms).
+   - Supports cross-language partial matching on:
+     - Company code (`db_company.code`)
+     - Thai company name (`db_company_label.label` TH)
+     - English company name (`db_company_label.label` EN)
+     - Registration number (`db_company.registration_number`)
 
 4. **Company Data Table**:
-   - **คอลัมน์ในตาราง**:
-     - `รหัสบริษัท` (Code)
-     - `ชื่อบริษัท (ไทย)`
-     - `ชื่อบริษัท (EN)`
-     - `องค์กรแม่` (แสดงเฉพาะเมื่อเลือกดู All Organizations)
-     - `Tax ID`
-     - `สกุลเงินหลัก` (Currency Code เช่น THB, USD)
-     - `สถานะ` (Active / Inactive Badge)
-     - `การกระทำ (Actions)`:
-       - ✏️ **Edit**: ลิงก์ไปยัง `/db/dbpg001/company?id={company_id}`
-       - 👁️ **Branches**: ทางลัดไปดูสาขาของบริษัทนี้ใน [[DBPG002_BRANCHES_DEPARTMENTS|DBPG002]] (`/db/dbpg002?company_id={company_id}`)
+   - **Table Columns**:
+     - `Code`
+     - `Company Name (TH)`
+     - `Company Name (EN)`
+     - `Parent Organization` (shown when viewing All Organizations)
+     - `Company Type`
+     - `Primary Currency` (e.g. `THB`, `USD`)
+     - `Status` (Active / Inactive badge)
+     - `Actions`:
+       - ✏️ **Edit**: Navigates to `/db/dbpg001/company/{company_id}`
+       - 👁️ **Branches**: Shortcut to view branches of this company in [[DBPG002_BRANCHES_DEPARTMENTS|DBPG002]] (`/db/dbpg002?company_id={company_id}`)
 
-### 3.2 กฎเกณฑ์และเงื่อนไขทางธุรกิจ (Business Rules)
-- **Data Permission**: ผู้ใช้งานจะเห็นเฉพาะ Organization และ Company ที่ได้รับสิทธิ์ตาม ABAC Scope (`su_user.company_id` หรือ Group Scopes)
-- **Pagination & Sorting**: รองรับ Pagination (10, 25, 50 รายการ) และคลิกเรียงลำดับ (Sort Asc/Desc) ตามรหัสบริษัท หรือชื่อบริษัท
-
----
-
-## 🔗 4. หน้า Detail เชื่อมโยง (Sub-Pages)
-- 📄 **[[DBPG001_ORGANIZATIONS#หน้า-1-dbdbpg001org-จัดการองค์กร-org|/db/dbpg001/org]]**: หน้าจอ Create / Update ข้อมูลองค์กร
-- 📄 **[[DBPG001_ORGANIZATIONS#หน้า-2-dbdbpg001company-จัดการบริษัท-company|/db/dbpg001/company]]**: หน้าจอ Create / Update ข้อมูลบริษัท
+### 3.2 Business Rules
+- **Data Visibility Scope**: Users only see companies permitted by their View Scope (`ViewScope` middleware based on home branch and `su_user_assignment` scopes — see [[12_VIEW_SCOPE_COMPANY_SWITCHER]]).
+- **Pagination & Sorting**: Supports server-side pagination (10, 25, 50 rows per page) and sorting by company code or name.
 
 ---
 
-## 🔒 5. สิทธิ์การเข้าใช้งาน (Permissions & Security)
-ระบบตรวจสิทธิ์ของโปรแกรม `DBPG000` ที่ฝั่ง API ทุก endpoint (ต้องล็อกอินผ่าน Kratos ก่อน):
-- **`READ`** = ดู/ค้นหา: ทุก GET (รายชื่อองค์กร/บริษัท, รายละเอียด, ประเภทบริษัท, สรุป KPI) — หน้านี้เข้าจากเมนู `DBPG001` (ข้อมูลองค์กร) จึงยอมรับ READ ของ `DBPG000` **หรือ** `DBPG001` อย่างใดอย่างหนึ่ง
-- **`WRITE`** = เพิ่ม/แก้ไข: โปรแกรมนี้เป็นหน้าอ่านอย่างเดียว การเพิ่ม/แก้ไขทำผ่าน `DBPG001`
-- **`APPROVE`** = ลบ: ไม่มี endpoint ลบในโปรแกรมนี้ (การลบอยู่ที่ `DBPG001`)
-- ไม่มีสิทธิ์ => HTTP 403 `FORBIDDEN`
+## 🔗 4. Linked Detail Sub-Pages
+- 📄 **[[DBPG001_ORGANIZATIONS#page-1-dbdbpg001org-organization-management-org|/db/dbpg001/org]]**: Create / Update Organization screen
+- 📄 **[[DBPG001_ORGANIZATIONS#page-2-dbdbpg001company-company-management-company|/db/dbpg001/company]]**: Create / Update Company screen
+
+---
+
+## 🔒 5. Permissions & Security
+The API enforces program permissions for `DBPG000` on every endpoint (behind Ory Kratos session authentication):
+- **`READ`** = View / Search: Required for all `GET` endpoints (organizations list/detail, companies list/detail, company types, KPI summary). Because this screen is opened via the `DBPG001` sidebar menu entry, the API accepts `READ` on **either** `DBPG000` **or** `DBPG001`.
+- **`WRITE`** = Create / Edit: `DBPG000` is a read-only overview screen; mutations are handled by `DBPG001`.
+- **`APPROVE`** = Delete: No delete endpoints exist on `DBPG000` (deletion is handled in `DBPG001`).
+- Missing permission => HTTP 403 `FORBIDDEN`.
 
 ---
 
 ## 💻 6. Clean Architecture Implementation
 - **Frontend SPA (Leptos 0.8 CSR WebAssembly)**:
-  - Route: `/organization` (และ alias `/db/dbpg000`)
+  - Route: `/organization` (and alias `/db/dbpg000`)
   - Page Entry: [`handler/web/application/master/src/pages/db/dbpg000/mod.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/mod.rs) (`Dbpg000Page`)
   - Screen Orchestrator: [`handler/web/application/master/src/pages/db/dbpg000/screens/dbpg000_screen.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/screens/dbpg000_screen.rs)
   - Components:
-    - [`org_stats_cards.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/org_stats_cards.rs): สรุป KPI ยอดรวมกลุ่มองค์กร และบริษัทที่เปิด/ปิดใช้งาน
-    - [`org_selector_bar.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/org_selector_bar.rs): Dropdown เลือกกลุ่มองค์กร + ปุ่ม Add Org / Edit Org / Add Company
-    - [`company_search_filter.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/company_search_filter.rs): ค้นหา Real-time หลายมิติ + ปุ่มกรองสถานะ Active/Inactive
-    - [`company_data_table.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/company_data_table.rs): ตารางข้อมูลบริษัท, รหัส, ชื่อไทย/อังกฤษ, สังกัดองค์กร, ประเภท, สถานะ, ปุ่มแก้ไขและทางลัดสาขา
-  - Provider & Context: [`providers/dbpg000_context.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/providers/dbpg000_context.rs) (จัดการ Reactive Error Signal)
-  - Empty State UI: แสดงผลหน้าจอพร้อมตารางเปล่า (`Empty Table State`: "ไม่พบข้อมูลบริษัท" พร้อมปุ่ม "+ เพิ่มบริษัทใหม่") และแสดงแถบเตือนสถานะเมื่อยังไม่สามารถเชื่อมต่อฐานข้อมูลได้ แทนการตัดเข้าหน้า 503 เต็มจอ
+    - [`org_stats_cards.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/org_stats_cards.rs): KPI summary cards for total organizations and active/inactive companies
+    - [`org_selector_bar.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/org_selector_bar.rs): Organization selector dropdown + Add Org / Edit Org / Add Company buttons
+    - [`company_search_filter.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/company_search_filter.rs): Multi-dimensional real-time search + Active/Inactive status filter chips
+    - [`company_data_table.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/components/company_data_table.rs): Company data table with logos, codes, Thai/English names, parent org, company type, status, edit action, and branches shortcut
+  - Provider & Context: [`providers/dbpg000_context.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/web/application/master/src/pages/db/dbpg000/providers/dbpg000_context.rs) (manages reactive state and error signals)
+  - Empty State UI: Renders an empty table state ("No companies found" with a "+ Add Company" button) and an inline warning banner when the database is unreachable rather than a full-screen 503 error page.
 - **Backend API Delivery Tier (Axum 0.8)**:
   - Router: [`handler/api/master/src/routers/dbpg000_router.rs`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/handler/api/master/src/routers/dbpg000_router.rs)
   - Endpoints:
-    - `GET /api/v1/db/dbpg000/organizations` (ดึงรายการองค์กรพร้อมชื่อภาษาและจำนวนบริษัท)
-    - `GET /api/v1/db/dbpg000/organizations/{id}` (ดึงองค์กรรายตัว)
-    - `GET /api/v1/db/dbpg000/organizations/summary` (ดึงสรุป KPI สถิติภาพรวม)
-    - `GET /api/v1/db/dbpg000/companies` (ดึงรายการบริษัท กรองตามองค์กร, ค้นหา, สถานะ, แบ่งหน้า)
-    - `GET /api/v1/db/dbpg000/companies/{id}` (ดึงบริษัทรายตัว)
-    - `GET /api/v1/db/dbpg000/companies/types` (ดึงประเภทนิติบุคคลจาก db_master_lookup)
+    - `GET /api/v1/db/dbpg000/organizations` (list organizations with localized labels and company counts)
+    - `GET /api/v1/db/dbpg000/organizations/{id}` (get single organization)
+    - `GET /api/v1/db/dbpg000/organizations/summary` (get overall KPI statistics)
+    - `GET /api/v1/db/dbpg000/companies` (list companies filtered by organization, search query, status, and pagination)
+    - `GET /api/v1/db/dbpg000/companies/{id}` (get single company)
+    - `GET /api/v1/db/dbpg000/companies/types` (list legal entity types from `db_master_lookup`)
 - **Application CQRS Layer (`application-master`)**:
   - Feature: [`application/master/src/features/db/dbpg000/`](file:///home/attaporn_j/Desktop/work/research/rust_arch_clean/application/master/src/features/db/dbpg000/)
   - Trait Commands: `OrganizationCommands` & Executor: `OrganizationCommandExecutor`

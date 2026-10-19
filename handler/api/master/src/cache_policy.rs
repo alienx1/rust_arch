@@ -27,5 +27,7 @@ pub fn invalidation_rules() -> Vec<InvalidationRule> {
         InvalidationRule { path: "/su/supg003", namespaces: &[ACL, MENU, ORG] },
         InvalidationRule { path: "/su/supg004", namespaces: &[ACL, MENU, ORG, DASHBOARD] },
         InvalidationRule { path: "/su/supg005", namespaces: &[ACL, MENU, DASHBOARD] },
+        // Sign-in lock and mail template settings: read through the ACL namespace by the account security feature
+        InvalidationRule { path: "/su/supg006", namespaces: &[ACL] },
     ]
 }

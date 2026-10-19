@@ -1,78 +1,78 @@
-# แก้ปัญหาที่เจอบ่อย (dev)
+# Troubleshooting Common Issues (Development)
 
-ทุกข้อด้านล่างเกิดขึ้นจริงระหว่างพัฒนาโปรเจกต์นี้ — เรียงตามอาการที่เห็น
+Every issue listed below occurred during actual development of this project — organized by symptom.
 
-## เริ่มจากตรวจ 4 อย่างนี้
+## Start by Checking These 4 Commands
 
 ```bash
-make status                                   # pod ใน cluster ต้อง Running (ไม่นับ Completed/Error ของเก่า)
-df -h /                                       # ดิสก์ใช้เกิน ~85% → ดูหัวข้อ "ดิสก์เต็ม"
-ss -ltnp | grep -E ':(8000|8001|8002|3000) '  # service ที่ควรรัน มี process ฟังพอร์ตอยู่ไหม
-kubectl -n arch exec deploy/arch-cache -- valkey-cli --scan --pattern 'arch:*' | head   # ถ้าสงสัยแคช
+make status                                   # Cluster pods should be Running (ignoring old Completed/Error pods)
+df -h /                                       # Disk usage over ~85% → see "Disk full" below
+ss -ltnp | grep -E ':(8000|8001|8002|3000) '  # Check which local services are listening on their expected ports
+kubectl -n arch exec deploy/arch-cache -- valkey-cli --scan --pattern 'arch:*' | head   # Inspect Valkey cache keys
 ```
 
-## cluster / โครงสร้างพื้นฐาน
+## Cluster & Infrastructure
 
-| อาการ | สาเหตุ | แก้ |
+| Symptom | Cause | Fix |
 |---|---|---|
-| `make master` ขึ้น "Connection reset by peer" / pod โดนไล่หมด | **ดิสก์เต็ม** → kubelet ใส่ taint `DiskPressure` แล้ว evict pod ทั้งหมด | เคลียร์ดิสก์ให้ต่ำกว่า ~85% แล้วรอ pod กลับ (`kubectl describe node \| grep -i pressure`). ตัวใหญ่ที่เจอ: `target/` ของ cargo (หลายสิบ GB — ตั้ง `CARGO_TARGET_DIR` ไว้ที่ `~/.cache/…` แล้วลบได้), `~/.local/share/containers`, volume docker ที่ไม่ใช้ |
-| หลัง restart เครื่อง/เน็ต: `arch-identity` ค้าง `Init:Error` / `Unknown`, Kratos ไม่ขึ้น (`lookup pgedge … connection refused`) | CoreDNS ของ k3s สตาร์ทไม่สำเร็จรอบแรก (`Unknown`) → DNS ใน cluster ใช้ไม่ได้ | `kubectl -n kube-system delete pod -l k8s-app=kube-dns` แล้ว `kubectl -n arch delete pod -l app.kubernetes.io/name=arch-identity` |
-| `arch-streaming-console` `CrashLoopBackOff` ตอนเริ่ม | console รอ Redpanda พร้อม | รอสักครู่ จะหายเอง |
-| pod `Completed` / `Error` เก่า ๆ เต็ม `make status` | pod รุ่นก่อนที่ถูกแทนที่แล้ว | `kubectl -n arch delete pod --field-selector=status.phase=Succeeded` (และ `Failed`) |
-| ไฟล์รายงานหาย (พรีวิว 503/410 `REPORT_FILE_GONE`), topic หาย, ดัชนี Quickwit หาย | เดิม Garage/Redpanda/Quickwit ใช้ `emptyDir` → pod เกิดใหม่แล้วข้อมูลหาย (ตอนนี้ใช้ PVC แล้ว ข้อมูลอยู่รอด) | ถ้าเกิดกับ cluster ที่สร้างก่อนมี PVC: `make deploy` เพื่อใช้ PVC แล้ว `make topics` |
-| `make seed` หยุดด้วย "database was loaded from an older sql/01_ysql.sql" | schema เก่ากว่าไฟล์ในโค้ด (ไฟล์ 00–50 โหลดครั้งเดียว) | ดู [`sql/README.md`](../../sql/README.md): เพิ่ม migration แบบ idempotent หรือสร้างฐานใหม่ `make down && make bootstrap` (**ลบข้อมูลทั้งหมด**) |
-| ไม่มี `psql` ในเครื่อง | อยู่ใน pod | `kubectl -n arch exec -it arch-database-0 -- psql -U postgres -d arch` (ใช้ `set search_path=arch;`) |
+| `make master` fails with `"Connection reset by peer"` / all pods evicted | **Disk full** → kubelet taints the node with `DiskPressure` and evicts all pods | Free disk space below ~85% and wait for pods to recover (`kubectl describe node \| grep -i pressure`). Common culprits: Cargo `target/` (tens of GBs — point `CARGO_TARGET_DIR` to `~/.cache/…` and clean periodically), `~/.local/share/containers`, unused Docker volumes |
+| After host reboot or network change: `arch-identity` stuck in `Init:Error` / `Unknown`, Kratos fails (`lookup pgedge … connection refused`) | k3s CoreDNS failed on initial startup (`Unknown`) → cluster DNS resolution is broken | `kubectl -n kube-system delete pod -l k8s-app=kube-dns` followed by `kubectl -n arch delete pod -l app.kubernetes.io/name=arch-identity` |
+| `arch-streaming-console` in `CrashLoopBackOff` during startup | Console pod is waiting for Redpanda to become ready | Wait a moment; it resolves automatically once Redpanda starts |
+| Old `Completed` / `Error` pods cluttering `make status` | Superseded pods from earlier jobs/rollouts | `kubectl -n arch delete pod --field-selector=status.phase=Succeeded` (and `Failed`) |
+| Report files missing (preview returns `503`/`410 REPORT_FILE_GONE`), topics missing, or Quickwit indexes missing | Earlier versions used `emptyDir` for Garage/Redpanda/Quickwit (now migrated to PVCs so data persists across restarts) | If running on an older cluster created before PVCs: run `make deploy` to switch to PVCs, then `make topics` |
+| `make seed` stops with `"database was loaded from an older sql/01_ysql.sql"` | Database schema is older than `sql/01_ysql.sql` (files `00`–`50` only load once on an empty DB) | See [`sql/README.md`](../../sql/README.md): write an idempotent migration script, or recreate the database via `make down && make bootstrap` (**deletes all data**) |
+| `psql` is not installed on the host | `psql` is available inside the database pod | `kubectl -n arch exec -it arch-database-0 -- psql -U postgres -d arch` (then run `set search_path=arch;`) |
 
-## ล็อกอิน / สิทธิ์
+## Sign-In & Permissions
 
-| อาการ | สาเหตุ | แก้ |
+| Symptom | Cause | Fix |
 |---|---|---|
-| ล็อกอินแล้ว **500** (หรือ Kratos log `login-guard … connection refused`) | Kratos เรียก hook ไป api-master `:8000` ก่อนอนุญาต | `make master` ให้ api-master รันก่อนล็อกอิน |
-| ล็อกอินแล้ว **500** และ api-master log ว่า `login guard secret not configured` (503) | ไม่มี `KRATOS_WEBHOOK_SECRET` ใน `.env` (hook ปิดตายเมื่อไม่ได้ตั้งค่า) | ตั้งค่าให้ตรงกับ `X-Webhook-Secret` ใน configmap ของ Kratos (ดู `.env.example`) |
-| `curl` ล็อกอินแล้ว **403 CSRF** | ส่ง `csrf_token` แบบไม่ encode (มีตัว `+ / =`) ทำให้เพี้ยน | ใช้ `--data-urlencode "csrf_token=$CSRF"` |
-| เมนู/ปุ่มไม่ตรงกับสิทธิ์ที่เพิ่งแก้ | สิทธิ์และเมนูถูกแคช 60 วินาที (แต่การแก้ผ่านเว็บล้างให้ทันที) | ถ้าแก้ด้วย SQL ตรง ๆ: `make cache-flush` |
-| บัญชีไม่มีเมนูเลย | กลุ่มของผู้ใช้ไม่มี READ ที่โปรแกรมไหนเลย / กลุ่มปิดอยู่ / ผู้ใช้ `active=false` | ดูที่ SUPG003 / SUPG004 / SUPG005 |
-| API ตอบ 401 `Missing 'ory_kratos_session' cookie` | ไม่ได้ส่งคุกกี้ session | ล็อกอินผ่านเว็บ หรือใส่ `-b jar` ใน curl |
+| Sign-in returns **HTTP 500** (or Kratos logs `login-guard … connection refused`) | Kratos calls the `login-guard` webhook on `api-master` (`:8000`) before issuing a session | Start `api-master` (`make master`) before signing in |
+| Sign-in returns **HTTP 500** and `api-master` logs `login guard secret not configured` (`503`) | `KRATOS_WEBHOOK_SECRET` is missing from `.env` (the webhook fails closed when unconfigured) | Set `KRATOS_WEBHOOK_SECRET` in `.env` to match `X-Webhook-Secret` in Kratos' ConfigMap (see `.env.example`) |
+| Signing in via `curl` returns **403 CSRF** | `csrf_token` contains `+ / =` characters that were not URL-encoded | Use `--data-urlencode "csrf_token=$CSRF"` |
+| Sidebar menu or action buttons do not reflect newly updated permissions | Permissions and menus are cached for 60 seconds (changes made through the web UI invalidate the cache automatically) | If permissions were modified directly via SQL: run `make cache-flush` |
+| User account sees an empty sidebar menu | User's permission group has no `READ` grants on any program, the group is inactive, or `su_user.active=false` | Check `SUPG003` / `SUPG004` / `SUPG005` |
+| API returns `401 Missing 'ory_kratos_session' cookie` | Session cookie was not included in the request | Sign in via the web UI or pass `-b jar` when testing with `curl` |
 
-## เว็บ (Trunk / Leptos)
+## Web Frontend (Trunk / Leptos)
 
-| อาการ | สาเหตุ | แก้ |
+| Symptom | Cause | Fix |
 |---|---|---|
-| เปลี่ยนโค้ดแล้วหน้าไม่เปลี่ยน | wasm (debug) ใหญ่ ใช้เวลา build; หรือเบราว์เซอร์แคช | รอ trunk ขึ้น "success", แล้ว hard reload (Ctrl+Shift+R) |
-| หน้ารีโหลดเองซ้ำ ๆ | trunk live-reload ตอน build เสร็จ | ปกติ |
-| API ผ่านเว็บได้ 404/502 | ลำดับ `[[proxy]]` ผิด หรือ service นั้นไม่ได้รัน (config สร้างจาก `.env` ตอน `make web` — แก้ `.env` แล้วต้องรัน `make web` ใหม่) | ตัวที่ prefix ยาวกว่าอยู่ก่อน (`/api/v1/notifications/` → 8002, `/api/v1/reports/` → 8001, `/api/v1/` → 8000) แล้วเช็กพอร์ตด้วย `ss` |
-| ดาวน์โหลดรายงานได้ "Invalid signature" | proxy ตาม redirect ของ presigned URL | API ตอบ JSON `{url}` ให้เบราว์เซอร์เปิดเอง (ทำอยู่แล้ว) — ถ้าเปิดเว็บจากเครื่องอื่น `AWS_ENDPOINT_URL` ยังเป็น `localhost:3900` ต้องตั้งเป็น URL ที่เบราว์เซอร์เข้าถึงได้ |
-| สไตล์ `bg-primary/10`, `border-border/60` ไม่ขึ้น | Tailwind ทำ alpha กับตัวแปรสีธีม (`var(--…)`) ไม่ได้ | ใช้ `bg-[color-mix(in_oklch,var(--primary)_12%,transparent)]` |
-| คลาส Tailwind ใหม่ไม่มีผล | CSS ถูกคอมไพล์ตอน build จากชื่อคลาสที่ปรากฏเต็ม ๆ ใน `.rs` — ถ้าประกอบด้วย `format!` ให้เขียนชื่อเต็มหรือใส่ `safelist` ใน `tailwind.config.js`; รอ trunk build เสร็จแล้ว hard reload |
-| `make web` ครั้งแรกช้า/ล้มเหลวตอนโหลด Tailwind | trunk ต้องดาวน์โหลด Tailwind CLI 3.4.17 จาก GitHub ครั้งเดียว (เก็บใน `~/.cache/trunk`) — ถ้าออฟไลน์ ให้วาง binary `tailwindcss` เวอร์ชัน 3.4.17 ไว้ใน `PATH` |
-| dropdown ไม่ปิดเมื่อคลิกที่อื่น | ชั้นโปร่งใส `fixed inset-0` ใน topbar (มี `backdrop-blur`) คลุมแค่ topbar | ใช้ `web_package::ui::component::dismiss_on_outside` |
-| คอมไพล์ wasm ไม่ผ่านเพราะ web-sys | ไม่ได้เปิด feature | เพิ่มใน `Cargo.toml` ของ `handler/web/package` / `handler/web/application/master` |
+| Code changes do not appear in the browser | Debug WASM binary is large and still compiling, or browser cached the old bundle | Wait until Trunk prints `"success"`, then hard reload (`Ctrl+Shift+R`) |
+| Page reloads repeatedly on its own | Trunk live-reload triggering as builds finish | Normal during active compilation |
+| API calls from the web UI return `404`/`502` | Misordered `[[proxy]]` rules or target backend service is not running (`Trunk.toml` is generated from `.env` during `make web` — re-run `make web` after editing `.env`) | Ensure longer prefixes appear first (`/api/v1/notifications/` → `8002`, `/api/v1/reports/` → `8001`, `/api/v1/` → `8000`) and check listening ports with `ss` |
+| Report download fails with `"Invalid signature"` | Proxy followed a redirect to a pre-signed S3 URL and altered the `Host` header | The API returns JSON `{url}` for the browser to open directly — if accessing the web UI from another machine while `AWS_ENDPOINT_URL` is `localhost:3900`, update `AWS_ENDPOINT_URL` to a host reachable by the browser |
+| `bg-primary/10` or `border-border/60` has no visible background/border color | Tailwind 3 cannot apply `/alpha` modifiers to CSS custom properties (`var(--…)`) | Use `bg-[color-mix(in_oklch,var(--primary)_12%,transparent)]` |
+| Newly added Tailwind class has no effect | Tailwind scans `.rs` files statically at build time — classes constructed dynamically via `format!` are not detected | Write full class name literals or add them to `safelist` in `tailwind.config.js`; wait for Trunk build to finish and hard reload |
+| First `make web` run is slow or fails downloading Tailwind | Trunk downloads Tailwind CLI `3.4.17` from GitHub once (cached in `~/.cache/trunk`) | If working offline, place a `tailwindcss` `3.4.17` binary in your `PATH` |
+| Dropdown does not close when clicking outside | A `fixed inset-0` backdrop inside the topbar (which uses `backdrop-blur`) only covers the topbar area | Use `web_package::ui::component::dismiss_on_outside` |
+| WASM build fails due to missing `web-sys` method/type | Corresponding `web-sys` Cargo feature is not enabled | Add the feature to `Cargo.toml` in `handler/web/package` and/or `handler/web/application/master` |
 
-## ข้อความ / รายงาน / แจ้งเตือน / audit
+## i18n / Reports / Notifications / Audit Log
 
-| อาการ | สาเหตุ | แก้ |
+| Symptom | Cause | Fix |
 |---|---|---|
-| ข้อความหน้าจอเป็นภาษาไทยทั้งที่เลือกอังกฤษ | ขาด key ใน `db_label` (ใช้ข้อความไทยสำรองจาก `t_or`) | เพิ่มใน `sql/NN_i18n_*.sql` แล้ว `make seed` |
-| กด export แล้วไม่มีอะไรเกิดขึ้น | `api-report` (8001) ไม่ได้รัน หรือ topic `report.requests` ไม่มี | `make report`, `make topics` |
-| ไม่ได้รับอีเมลตั้งรหัสผ่าน | `api-notification` ไม่ได้รัน หรือไม่มี topic `mail-outbox` หรือ `mail.smtp_url` ไม่ถูกต้อง (ดู log ของ api-notification) | `make notification`, `make topics`, ตรวจ `su_configuration` |
-| กระดิ่งไม่เด้ง | `api-notification` (8002) ไม่ได้รัน / ไม่มี topic `notifications` | `make notification`, `make topics` |
-| งานรายงาน `running` ค้าง | worker ตายกลางทาง | ดู ALPG001 (Process Monitor): งานค้างเกิน 15 นาทีกด "ประมวลผลใหม่" ได้ |
-| Ctrl+C แล้ว api-report ไม่ยอมหยุด | SSE ที่เปิดค้าง | แก้แล้ว (ปิด stream + watchdog 10 วินาที); Ctrl+C ซ้ำออกทันที |
-| ALPG000 ว่าง / "audit service down" | Quickwit ล่ม หรือดัชนียังไม่ถูกสร้าง | `kubectl -n arch get pod -l app.kubernetes.io/name=arch-logging`; ดัชนี `audit-logs-v1` ถูกสร้างเองตอนมี event แรก; ดัชนี event ของ Redpanda: `make event-indexes` |
-| ALPG000 ไม่เห็น "Event: …" | ยังไม่ได้ `make topics` / `make event-indexes` | รันทั้งสอง |
+| UI text still appears in Thai when English is selected | Key is missing from `db_label` (falling back to the default string in `t_or`) | Add the key to `sql/NN_i18n_*.sql` and run `make seed` |
+| Clicking "Export CSV" does nothing | `api-report` (`:8001`) is not running or topic `report.requests` does not exist | Run `make report` and `make topics` |
+| Password setup email is not received | `api-notification` is not running, topic `mail-outbox` is missing, or `mail.smtp_url` is invalid (check `api-notification` logs) | Run `make notification`, `make topics`, and verify `su_configuration` |
+| Notification bell does not update in real time | `api-notification` (`:8002`) is not running or topic `notifications` is missing | Run `make notification` and `make topics` |
+| Report job stays stuck in `running` | Worker crashed mid-job | Open `ALPG001` (Process Monitor): jobs stuck for over 15 minutes can be reprocessed |
+| `Ctrl+C` on `api-report` / `api-notification` used to hang | Open SSE streams blocked graceful shutdown | Fixed (closes streams + 10s watchdog); pressing `Ctrl+C` a second time exits immediately |
+| `ALPG000` is empty or shows `"audit service down"` | Quickwit pod is down or index has not been created yet | Check `kubectl -n arch get pod -l app.kubernetes.io/name=arch-logging`; `audit-logs-v1` is auto-created on first event; for Redpanda event indexes run `make event-indexes` |
+| `ALPG000` does not show `"Event: …"` filter results | Redpanda topics or Quickwit Kafka sources have not been created | Run `make topics` and `make event-indexes` |
 
-## แคช Valkey
+## Valkey Cache
 
-| อาการ | สาเหตุ | แก้ |
+| Symptom | Cause | Fix |
 |---|---|---|
-| ข้อมูลที่เพิ่งแก้ยังเป็นค่าเก่า | แก้ด้วย SQL/seed (ไม่ผ่าน API จึงไม่มีการล้าง) | `make cache-flush` (`make seed` เรียกให้) |
-| สงสัยว่าแคชทำให้ผลเพี้ยน | — | `READ_CACHE_ENABLED=false` ใน `.env` แล้ว restart api-master เทียบผล |
-| อยากดูว่า hit/miss | — | log target `arch::cache` (`RUST_LOG="…,arch::cache=debug"`); รายละเอียดที่ [`11_VALKEY_READ_CACHE.md`](../architecture/11_VALKEY_READ_CACHE.md) |
+| Recently updated data still shows old values | Data was modified directly via SQL/seed (bypassing API write invalidation) | Run `make cache-flush` (`make seed` runs this automatically) |
+| Suspect stale cache is causing unexpected query results | — | Set `READ_CACHE_ENABLED=false` in `.env`, restart `api-master`, and compare behavior |
+| Want to inspect cache hits/misses | — | Enable log target `arch::cache` (`RUST_LOG="…,arch::cache=debug"`); see [`11_VALKEY_READ_CACHE.md`](../architecture/11_VALKEY_READ_CACHE.md) |
 
-## เคล็ดลับตอน debug
+## Useful Debugging Commands
 
-- ดู log ของ pod: `make logs APP=arch-identity` (ต้องมี `stern`) หรือ `kubectl -n arch logs deploy/arch-identity -c kratos`
-- ดู topic: `kubectl -n arch exec deploy/arch-streaming -- rpk topic list` / `rpk topic consume <topic> -n 5`
-- ดู key แคช: `kubectl -n arch exec deploy/arch-cache -- valkey-cli --scan --pattern 'arch:*'`
-- ค้นอีเวนต์ใน Quickwit: `curl 'localhost:7280/api/v1/events-notifications-v1/search?query=*'`
-- ถ้าสั่ง `pkill -f <คำ>` แล้ว shell ตัวเองตายด้วย แปลว่าคำนั้นอยู่ในบรรทัดคำสั่งของคุณเอง — หา PID จาก `ss -ltnp` แทน
+- View pod logs: `make logs APP=arch-identity` (requires `stern`) or `kubectl -n arch logs deploy/arch-identity -c kratos`
+- Inspect Redpanda topics: `kubectl -n arch exec deploy/arch-streaming -- rpk topic list` / `rpk topic consume <topic> -n 5`
+- List Valkey cache keys: `kubectl -n arch exec deploy/arch-cache -- valkey-cli --scan --pattern 'arch:*'`
+- Query Quickwit events directly: `curl 'localhost:7280/api/v1/events-notifications-v1/search?query=*'`
+- Tip: if `pkill -f <pattern>` kills your own shell, the pattern matched your shell's command line — find the exact PID via `ss -ltnp` instead.

@@ -5,7 +5,6 @@ system_code: "AL"
 module_code: "ALMT"
 route_path: "/rp/rppg000"
 icon: "FileDoneOutlined"
-title_th: "รายงานของฉัน"
 title_en: "My Reports"
 parent_group: "ALPG000_GROUP"
 status: "Implemented (api-report + S3 + notifications)"
@@ -17,112 +16,111 @@ tags:
   - screen
 ---
 
-# 📑 RPPG000 — รายงานของฉัน (My Reports)
+# 📑 RPPG000 — My Reports
 
-> [!INFO] **ข้อมูลโปรแกรม (Program Metadata)**
+> [!INFO] **Program Metadata**
 > - **Program Code**: `RPPG000`
-> - **ชื่อภาษาไทย**: รายงานของฉัน
 > - **Title (EN)**: My Reports
 > - **Route Path**: `/rp/rppg000`
 > - **Icon**: `FileDoneOutlined` (`icondata_ai`)
-> - **System**: `AL` (ตรวจสอบ / Audit)
-> - **Module**: `ALMT` (ตรวจสอบระบบ / Audit Maintenance)
-> - **Parent Folder**: `ALPG000_GROUP` (ตรวจสอบ / Audit)
+> - **System**: `AL` (Audit)
+> - **Module**: `ALMT` (Audit Maintenance)
+> - **Parent Folder**: `ALPG000_GROUP` (Audit)
 > - **Database UUID**: `019ca1ed-0000-7000-8003-000000000040`
-> - **Backlink**: [[00_INDEX|กลับสู่สารบัญโปรแกรม (MOC)]]
+> - **Backlink**: [[00_INDEX|Back to Program Catalogue (MOC)]]
 
-ศูนย์รวมไฟล์รายงานและประวัติงานประมวลผลเบื้องหลัง (Background Export / Report Generation) ของผู้ใช้งานที่ล็อกอินอยู่ เมื่อผู้ใช้ส่งออกข้อมูลจากหน้าจอต่างๆ (เช่น ส่งออก Audit Log จาก [[ALPG000_AUDIT_LOG|ALPG000]]) ระบบจะส่งคำขอผ่าน Redpanda ให้ worker สร้างไฟล์และอัปโหลดไปยัง Garage S3 โดยอัตโนมัติ เมื่อเสร็จแล้วระบบจะแจ้งเตือนผ่าน [[NTPG000_NOTIFICATIONS|NTPG000 (Notifications)]] และนำผู้ใช้มาดูตัวอย่างหรือดาวน์โหลดไฟล์ที่หน้านี้
+Central hub for generated report files and background export job history belonging to the currently signed-in user. When a user triggers a data export from a screen (such as exporting Audit Logs from [[ALPG000_AUDIT_LOG|ALPG000]]), the request is dispatched via Redpanda to a background worker that streams the output into Garage S3. Once complete, the user receives a real-time notification via [[NTPG000_NOTIFICATIONS|NTPG000 (Notifications)]] and can preview or download the file on this screen.
 
 ---
 
-## 🔄 ภาพรวมวงจรการทำงาน (End-to-End Architecture Flow)
+## 🔄 End-to-End Architecture Flow
 
 ```text
-1. ผู้ใช้กดส่งออก CSV ที่ ALPG000 ────────▶ api-master ส่ง ReportJobMessage เข้า Redpanda topic `report.requests`
+1. User clicks Export CSV in ALPG000 ────────▶ api-master publishes ReportJobMessage to Redpanda topic `report.requests`
                                                                     │
                                                                     ▼
                                            api-report worker (consumer group `report-worker`)
-                                            1. บันทึก/อัปเดตสถานะใน rp_report_job ('queued' -> 'running')
-                                            2. สตรีมข้อมูลจาก Quickwit / DB ลง CSV (มี UTF-8 BOM)
-                                            3. อัปโหลดแบบ CsvObjectWriter ไปยัง Garage S3 (`reports/{id}.csv`)
-                                            4. อัปเดตสถานะเป็น 'succeeded' พร้อม row_count, size_bytes
-                                            5. ส่งข้อความเข้า topic `notifications`
+                                            1. Inserts/updates job status in rp_report_job ('queued' -> 'running')
+                                            2. Streams matching records from Quickwit / DB into CSV (with UTF-8 BOM)
+                                            3. Uploads via CsvObjectWriter to Garage S3 (`reports/{id}.csv`)
+                                            4. Updates status to 'succeeded' with row_count and size_bytes
+                                            5. Publishes completion event to topic `notifications`
                                                                     │
                                                                     ▼
-                                           api-notification ดัน SSE ไปยังเว็บผู้ใช้
+                                           api-notification pushes SSE event to the user's browser
                                                                     │
                                                                     ▼
-                                           ผู้ใช้กดข้อความแจ้งเตือน หรือเปิดหน้า /rp/rppg000
-                                            • ดูรายการสถานะรายงานทั้งหมด
-                                            • ดูตัวอย่างข้อมูล 20 แถวแรกใน Dialog
-                                            • ขอ Pre-signed URL ดาวน์โหลดไฟล์จริง
+                                           User clicks the notification or opens /rp/rppg000
+                                            • Views status of all requested report jobs
+                                            • Previews the first rows in a modal dialog
+                                            • Requests a short-lived Pre-signed S3 URL to download the file
 ```
 
 ---
 
-## 🗄️ โครงสร้างฐานข้อมูลและการจัดเก็บไฟล์
+## 🗄️ Database Schema & Object Storage
 
-### 1. ตาราง `rp_report_job` (`sql/01_ysql.sql`)
-เก็บประวัติคำขอและผลลัพธ์ของแต่ละงาน:
-- `id` (UUIDv7, PK): รหัสเฉพาะของงาน
-- `report_kind` (varchar(50)): ชนิดรายงาน เช่น `audit_log_csv`
-- `requested_by` (varchar(255)): Kratos username ของผู้ขอ
-- `filter` (jsonb): เงื่อนไขที่ใช้กรองข้อมูลตอนขอรายงาน
-- `status` (varchar(20)): สถานะของงาน (`queued`, `running`, `succeeded`, `failed`)
-- `row_count` (bigint): จำนวนแถวข้อมูลทั้งหมดในไฟล์
-- `size_bytes` (bigint): ขนาดไฟล์เป็นไบต์
-- `file_name` (varchar(255)): ชื่อไฟล์ดาวน์โหลด (เช่น `audit-log-20261012-152000.csv`)
-- `object_key` (varchar(500)): path ใน Garage S3 (เช่น `reports/{job_id}.csv`)
-- `error` (text): ข้อความ error กรณีล้มเหลว
-- `requested_at` / `started_at` / `finished_at` (timestamptz)
+### 1. Table `rp_report_job` (`sql/01_ysql.sql`)
+Stores job request metadata and execution results:
+- `id` (UUIDv7, PK): Unique job identifier
+- `report_kind` (`varchar(50)`): Report type, e.g. `audit_log_csv`
+- `requested_by` (`varchar(255)`): Kratos username of the requester
+- `filter` (`jsonb`): Filter parameters captured when the export was requested
+- `status` (`varchar(20)`): Job state (`queued`, `running`, `succeeded`, `failed`)
+- `row_count` (`bigint`): Total number of data rows written to the file
+- `size_bytes` (`bigint`): Total file size in bytes
+- `file_name` (`varchar(255)`): Suggested download filename (e.g. `audit-log-20261012-152000.csv`)
+- `object_key` (`varchar(500)`): Object path in Garage S3 (e.g. `reports/{job_id}.csv`)
+- `error` (`text`): Error description if the job failed
+- `requested_at` / `started_at` / `finished_at` (`timestamptz`)
 
-### 2. ที่เก็บไฟล์ (Garage S3 Object Storage)
+### 2. Object Storage (Garage S3)
 - Bucket: `rust-arch-bucket`
-- คีย์: `reports/{job_id}.csv`
-- สตรีมผ่าน `CsvObjectWriter` แบ่งพาร์ตละ 5MB เพื่อประหยัดหน่วยความจำเมื่อข้อมูลมีขนาดใหญ่
+- Key pattern: `reports/{job_id}.csv`
+- Streamed via `CsvObjectWriter` using multipart upload chunks so large exports keep a constant memory footprint.
 
 ---
 
-## 🔌 API Endpoints (`api-report`, พอร์ต 8001)
+## 🔌 API Endpoints (`api-report`, Port 8001)
 
-เส้นทางหลักขึ้นต้นด้วย `/api/v1/reports` (ต้องมี Kratos session และเห็นเฉพาะงานของตนเอง):
+All endpoints are mounted under `/api/v1/reports` (requires a valid Kratos session and restricts visibility strictly to the user's own jobs):
 
-| Method | Path | ความหมาย | รายละเอียด |
+| Method | Path | Summary | Details |
 |---|---|---|---|
-| GET | `/api/v1/reports/jobs` | รายการรายงานของฉัน | เรียงลำดับจากใหม่สุดไปเก่าสุด รองรับ wire format JSON และ CBOR |
-| GET | `/api/v1/reports/jobs/{id}` | ข้อมูลสถานะของงานระบุตาม ID | คืนข้อมูลแถวงาน `ReportJobDto` |
-| GET | `/api/v1/reports/jobs/{id}/preview?rows=20` | ดูตัวอย่างแถวเริ่มต้น | สตรีมส่วนหัวและแถวแรกจาก S3 มา parse เป็นตารางตัวอย่าง (ค่าเริ่มต้น 20 แถว) |
-| GET | `/api/v1/reports/jobs/{id}/download` | ขอลิงก์ดาวน์โหลดไฟล์ | คืนค่า JSON `{ "url": "..." }` เป็น Pre-signed S3 URL อายุสั้นเพื่อความปลอดภัย |
+| `GET` | `/api/v1/reports/jobs` | List current user's report jobs | Ordered newest first; supports JSON and CBOR wire formats |
+| `GET` | `/api/v1/reports/jobs/{id}` | Get single job status by ID | Returns `ReportJobDto` (returns `404` if owned by another user) |
+| `GET` | `/api/v1/reports/jobs/{id}/preview?rows=20` | Preview initial rows | Streams the header and initial rows from S3 via ranged GET and parses them into a preview table |
+| `GET` | `/api/v1/reports/jobs/{id}/download` | Request download link | Returns JSON `{ "url": "..." }` containing a short-lived Pre-signed S3 URL |
 
 ---
 
-## 💻 หน้าจอผู้ใช้งาน (User Interface & Clean UI)
+## 💻 User Interface & Clean UI
 
 - **Route Path**: `/rp/rppg000`
-- **Component Shell**: ประกอบด้วย Header แนะนำการใช้งาน, ปุ่ม Refresh, และตารางรายการ
-- **ตารางแสดงผล (`ReportJobTable`)**:
-  - **สร้างเมื่อ**: วันที่และเวลาตาม Timezone ประเทศไทย (UTC+7)
-  - **ชนิดรายงาน**: ชนิดและไอคอนประเภทรายงาน
-  - **สถานะ**:
-    - ⏳ `queued` (รอคิว)
-    - 🔄 `running` (กำลังประมวลผล)
-    - ✅ `succeeded` (สร้างสำเร็จ)
-    - ❌ `failed` (ล้มเหลว พร้อม tooltips แสดงสาเหตุ)
-  - **จำนวนแถว / ขนาด**: แสดงจำนวนแถวและฟอร์แมตขนาดไฟล์ (KB, MB)
-  - **การจัดการ**:
-    - ปุ่ม **"ดูตัวอย่าง"** (เปิด `ReportPreviewDialog` ดูคอลัมน์และข้อมูล 20 แถวแรก)
-    - ปุ่ม **"ดาวน์โหลด"** (เปิดดาวน์โหลดผ่าน Pre-signed S3 URL)
-- **การเชื่อมโยงกับ Process Monitor**: กรณีเกิดข้อผิดพลาดหรือกระบวนการค้าง แอดมินสามารถตรวจสอบและสั่งรันซ้ำได้ที่ [[ALPG001_PROCESS_MONITOR|ALPG001 (Process Monitor)]]
+- **Component Shell**: Page header with usage guidance, Refresh button, and `DataTable`.
+- **Report Table (`ReportJobTable`)**:
+  - **Requested At**: Timestamp formatted in Thailand timezone (UTC+7)
+  - **Report Kind**: Report type label and icon
+  - **Status**:
+    - ⏳ `queued` (Queued)
+    - 🔄 `running` (Running)
+    - ✅ `succeeded` (Completed)
+    - ❌ `failed` (Failed, with error reason)
+  - **Rows / Size**: Row count and human-readable file size (`KB`, `MB`)
+  - **Actions**:
+    - **"Preview"** button (opens `ReportPreviewDialog` displaying columns and initial rows)
+    - **"Download"** button (fetches and opens the Pre-signed S3 URL)
+- **Process Monitor Integration**: If a background job fails or gets stuck, administrators can inspect and reprocess it in [[ALPG001_PROCESS_MONITOR|ALPG001 (Process Monitor)]].
 
 ---
 
-## 🧱 โครงสร้างโค้ดในระบบ (Code Layout)
+## 🧱 Code Layout
 
 - **Domain Entity**: `domain/src/entity/rp_report_job.rs`
 - **Application Layer**: `application/report/src/features/rppg000/`
   - `commands/`: `list_jobs.rs`, `get_job.rs`, `download_job.rs`, `preview_job.rs`, `run_report_job.rs`, `csv_object_writer.rs`, `audit_csv_rows.rs`
   - `queries/`: `db_rppg000_queries.rs`
-  - `models/`: DTOs, ค่าคงที่ `job_status`, `DOWNLOAD_LINK_SECS`, `UPLOAD_PART_BYTES`
+  - `models/`: DTOs, `job_status` constants, `DOWNLOAD_LINK_SECS`, `UPLOAD_PART_BYTES`
 - **API Delivery**: `handler/api/report/src/routers/rppg000_router.rs`
 - **Frontend SPA**: `handler/web/application/master/src/pages/rp/rppg000/`
   - `components/`: `report_job_table.rs`, `report_preview_dialog.rs`
@@ -133,8 +131,8 @@ tags:
 
 ---
 
-## 🔗 ความเชื่อมโยงที่เกี่ยวข้อง (Cross-References)
-- [[ALPG000_AUDIT_LOG|ALPG000 — บันทึกการตรวจสอบ]]: ต้นทางของคำขอส่งออกรายงาน CSV
-- [[ALPG001_PROCESS_MONITOR|ALPG001 — ติดตามกระบวนการ]]: หน้าสำหรับมอนิเตอร์และสั่ง Reprocess งาน
-- [[NTPG000_NOTIFICATIONS|NTPG000 — การแจ้งเตือน]]: ระบบ Push แจ้งเตือนเมื่อรายงานเสร็จสมบูรณ์
-- [[07_EVENT_STREAMING_OBSERVABILITY|Chapter 7: Event Streaming & Observability]]: สถาปัตยกรรม Redpanda `report.requests` และ Quickwit Index
+## 🔗 Cross-References
+- [[ALPG000_AUDIT_LOG|ALPG000 — Audit Log]]: Origin of CSV export job requests
+- [[ALPG001_PROCESS_MONITOR|ALPG001 — Process Monitor]]: Admin screen for monitoring and reprocessing background jobs
+- [[NTPG000_NOTIFICATIONS|NTPG000 — Notifications]]: Real-time SSE notification delivery when reports finish
+- [[07_EVENT_STREAMING_OBSERVABILITY|Chapter 7: Event Streaming & Observability]]: Redpanda `report.requests` architecture and Quickwit indexing

@@ -160,7 +160,7 @@ Interactive UI component showcases and static mock playgrounds (`/demo`) must ne
    - Respects `cfg!(debug_assertions)` (active in debug builds).
 2. **Dual-Layer Gating**:
    - **Route Level (`src/app.rs`)**: Gated with `is_dev_env()` before mounting `<Route path="/demo" ... />`.
-   - **Shell Navigation (`AppShell` / `Sidebar`)**: Navigation links (e.g. "ห้องทดลอง & ตัวอย่าง") must be wrapped in `if is_dev_env() { ... }` blocks so production users never see dev tools.
+   - **Shell Navigation (`AppShell` / `Sidebar`)**: Navigation links (e.g. "Playground & Examples") must be wrapped in `if is_dev_env() { ... }` blocks so production users never see dev tools.
 
 ---
 

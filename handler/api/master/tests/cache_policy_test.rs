@@ -27,6 +27,11 @@ fn test_permission_writes_clear_permissions_and_menus() {
 }
 
 #[test]
+fn test_security_settings_writes_clear_the_cached_settings() {
+    assert_clears("/api/v1/su/supg006/config", &[cache_ns::ACL]);
+}
+
+#[test]
 fn test_catalogue_writes_clear_programs_menu_and_permissions() {
     for path in ["/api/v1/su/supg001/systems/1", "/api/v1/su/supg002/programs/1"] {
         assert_clears(path, &[cache_ns::PROGRAMS, cache_ns::MENU, cache_ns::ACL, cache_ns::DASHBOARD]);

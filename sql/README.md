@@ -12,10 +12,10 @@ after it, `admin@arch.local` / `Admin@2026` can sign in (the Kratos identity is 
 | `02`–`50` | reference data: languages, currencies, countries, lookups, provinces … postal codes | load once |
 | `51_org_chart_seed.sql` | starting organization → company → branch → department | yes |
 | `52_program_catalogue.sql` | systems, modules and programs (the sidebar menu); no permissions | yes |
-| `53_admin_seed.sql` | `ADMIN` group , every grant derived from `db_program`, employee, `admin` account | yes |
+| `53_admin_seed.sql` | `ADMIN` group, every grant derived from `db_program`, employee, `admin` account | yes |
 | `54_abac_test_seed.sql` | `ABAC_TEST_DEPT` (READ only, assigned at the IT department) + `test_abac` account | yes |
-| `51_20261014_migrate_org_company_image.sql`, `51_20261014_migrate_employee_image.sql` | migration: คอลัมน์ `image_key` (โลโก้/รูปพนักงาน) ของ `db_organization` / `db_company` / `db_employee` | yes |
-| `55`–`90` | UI dictionary (`db_label`): base labels, API error templates, per-page translations | yes |
+| `51_20261014_migrate_org_company_image.sql`, `51_20261014_migrate_employee_image.sql` | migration: `image_key` column (logo / employee photo) on `db_organization` / `db_company` / `db_employee` | yes |
+| `55`–`92` | UI dictionary (`db_label`): base labels, API error templates, per-page translations | yes |
 
 Order rules:
 
@@ -30,30 +30,30 @@ Order rules:
   `uuidv7()`: see the generator expression in `75_i18n_table_page_size.sql`).
 
 
-## เปลี่ยน schema (ตาราง/คอลัมน์) — วิธีที่ใช้ได้จริงตอนนี้
+## Changing the Schema (Tables / Columns) — Current Workflow
 
-ไม่มีเครื่องมือ migration แยก; สิ่งที่มีคือ **ลำดับไฟล์ + กฎของ `kube/arch/utils/db-seed.sh`**:
+There is no separate migration tool; schema evolution relies on **file ordering + the rules in `kube/arch/utils/db-seed.sh`**:
 
-- ไฟล์เลข **≤ 50** (`00_`–`50_`) โหลด **ครั้งเดียว** ตอนฐานยังว่าง (ถ้าพบตาราง `db_language` แล้วจะข้าม)
-- ไฟล์เลข **≥ 51** รันซ้ำ **ทุกครั้ง** ที่ `make seed` จึงต้องเป็น idempotent
-- `01_ysql.sql` คือ "ความจริงของ schema" สำหรับฐานใหม่ — ต้องแก้ให้ตรงเสมอ
+- Files numbered **≤ 50** (`00_`–`50_`) are loaded **once** when the database is empty (skipped if `db_language` already exists).
+- Files numbered **≥ 51** run **every time** `make seed` is executed and must therefore be idempotent.
+- `01_ysql.sql` is the single source of truth for fresh databases — always keep it up to date.
 
-ดังนั้นการเปลี่ยน schema ทุกครั้งต้องทำ **สองที่คู่กัน**:
+Every schema change must therefore be applied in **two places together**:
 
-| ที่ | ทำอะไร | ใช้กับ |
+| Location | Action | Applies To |
 |---|---|---|
-| `sql/01_ysql.sql` | แก้ `CREATE TABLE` / เพิ่มคอลัมน์ / index ตามที่ต้องการให้เป็นในอนาคต | ฐานใหม่ (`make bootstrap`) |
-| `sql/51_<YYYYMMDD>_migrate_<อะไร>.sql` | คำสั่ง **idempotent** ที่ทำให้ฐานเดิมไปถึงสถานะเดียวกัน | ฐานที่มีอยู่แล้ว (`make seed`) |
+| `sql/01_ysql.sql` | Update `CREATE TABLE` / add columns / add indexes to reflect the desired target state | Fresh databases (`make bootstrap`) |
+| `sql/51_<YYYYMMDD>_migrate_<what>.sql` | Write **idempotent** statements that bring an existing database to the same state | Existing databases (`make seed`) |
 
-ชื่อไฟล์ migration ใช้รูปแบบ `51_20261015_migrate_add_foo.sql`: เลขนำ `51` ทำให้รันทุกครั้ง และเรียง (`sort -V`) ก่อน `51_org_chart_seed.sql` จึงเสร็จก่อน seed ที่อาจต้องใช้คอลัมน์ใหม่
+Name migration files using the pattern `51_20261015_migrate_add_foo.sql`: the `51` prefix ensures it runs on every `make seed`, and `sort -V` places it before `51_org_chart_seed.sql` so migrations finish before any seed file that may depend on new columns.
 
-ตัวอย่างคำสั่ง idempotent:
+Idempotent migration examples:
 
 ```sql
--- เพิ่มคอลัมน์
+-- Add a column
 ALTER TABLE "db_branch" ADD COLUMN IF NOT EXISTS "foo" text;
 
--- เพิ่มตาราง (+ trigger audit: ตารางที่สร้างทีหลังบล็อกท้าย 01_ysql.sql ไม่ได้ trigger อัตโนมัติ)
+-- Add a table (+ audit trigger: tables created after the DO block at the end of 01_ysql.sql do not get the trigger automatically)
 CREATE TABLE IF NOT EXISTS "xx_bar" ( "id" uuid PRIMARY KEY NOT NULL, "row_version" bigint NOT NULL DEFAULT 1 );
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'al_capture_change' AND tgrelid = 'xx_bar'::regclass) THEN
@@ -62,15 +62,15 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ค่าเริ่มต้น / เติมข้อมูลย้อนหลัง
+-- Backfill / default values
 UPDATE "db_branch" SET "foo" = '' WHERE "foo" IS NULL;
 ```
 
-กติกา:
+Guidelines:
 
-- **เพิ่มได้ปลอดภัย** (ตาราง/คอลัมน์ที่ nullable หรือมี default, index) — ทำแบบข้างบน
-- **เปลี่ยน/ลบคอลัมน์, เปลี่ยนชนิด, เพิ่ม `NOT NULL` ลงข้อมูลเดิม** เป็นงานแบบ 2 ขั้น (deploy โค้ดที่รองรับทั้งสองแบบ → ย้ายข้อมูล → ค่อยลบของเก่า) อย่าทำในไฟล์ migration เดียวกับที่โค้ดเก่ายังใช้อยู่
-- หลังแก้ schema: `make seed` → `make gen-entities` (ตรวจ diff ของ `domain/src/entity/`) → `make cache-flush` (seed เรียกให้เอง)
-- ถ้าเป็นการเปลี่ยนที่ฐานเดิมรับไม่ได้จริง ๆ: เพิ่มชื่อตารางใหม่ใน guard ของ `db-seed.sh` เพื่อให้ฐานเก่าหยุดพร้อมข้อความ "recreate" (วิธีสุดท้าย: `make down && make bootstrap` **ลบข้อมูลทั้งหมด**)
-- ก่อนใช้กับฐานจริง: สำรองข้อมูลและลองบนสำเนาก่อนเสมอ ([`PRODUCTION_CHECKLIST.md`](../docs/guides/PRODUCTION_CHECKLIST.md))
-- ฐาน multi-region (pgEdge Spock): DDL ต้องทำให้ทุก node ตรงกัน — ตามแนวทางใน `docs/architecture/04_MULTI_REGION_TOPOLOGY.md`
+- **Safe additive changes** (new tables, nullable columns, columns with defaults, indexes) — apply directly as shown above.
+- **Renaming/dropping columns, changing types, or adding `NOT NULL` to existing data** requires a two-step rollout (deploy code compatible with both old and new schemas → migrate data → remove old schema in a later change). Do not break running code in a single migration step.
+- After modifying the schema: `make seed` → `make gen-entities` (inspect `git diff` on `domain/src/entity/`) → `make cache-flush` (`make seed` runs this automatically).
+- If a change is truly incompatible with existing databases: add the new table name to the guard in `db-seed.sh` so older databases stop with a "recreate" message (last resort: `make down && make bootstrap`, which **deletes all data**).
+- Before running against a production database: always back up and test on a copy first ([`PRODUCTION_CHECKLIST.md`](../docs/guides/PRODUCTION_CHECKLIST.md)).
+- Multi-region databases (pgEdge Spock): DDL must be kept consistent across all nodes — follow the guidelines in `docs/architecture/04_MULTI_REGION_TOPOLOGY.md`.

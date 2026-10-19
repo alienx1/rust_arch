@@ -40,9 +40,9 @@ This table maps search intents and keywords to the exact architecture document. 
 | **Streaming & Logs** | Redpanda, Kafka, Quickwit, OTLP, Tracing, Audit Trails, Inverted Index | [[07_EVENT_STREAMING_OBSERVABILITY]] |
 | **Failover & Recovery** | Disaster Recovery, RTO, RPO, Network Partition, Split-Brain, CAP Theorem | [[08_DISASTER_RECOVERY_AND_RESILIENCY]] |
 | **Network & Firewall** | Ports, DNS, NodePort, Ingress, NetworkPolicy, Mutual TLS, Secret Fan-out | [[09_NETWORK_PORTS_AND_SECURITY_MATRIX]] |
-| **Guides (ลงมือทำ)** | เพิ่มโปรแกรม, เพิ่ม service, แก้ปัญหา, เช็กลิสต์ production, เปลี่ยน schema | `docs/guides/` ([[ADD_A_PROGRAM]], [[ADD_A_SERVICE]], [[TROUBLESHOOTING]], [[PRODUCTION_CHECKLIST]]) |
-| **Valkey Read Cache** | อะไรแคช/ไม่แคช, key, TTL, การล้างเมื่อเขียน, ข้อจำกัดหลาย region | [[11_VALKEY_READ_CACHE]] |
-| **View Scope & เลือกบริษัท** | HQ เห็นภาพรวม/เลือกบริษัท, สาขาอื่นเห็นเฉพาะสาขาตัวเอง, middleware, หน้าที่ถูกกรอง | [[12_VIEW_SCOPE_COMPANY_SWITCHER]] |
+| **Guides (Hands-On)** | Add a program, add a service, troubleshooting, production checklist, schema changes | `docs/guides/` ([[ADD_A_PROGRAM]], [[ADD_A_SERVICE]], [[TROUBLESHOOTING]], [[PRODUCTION_CHECKLIST]]) |
+| **Valkey Read Cache** | Cached vs uncached data, keys, TTL, write invalidation, multi-region caveats | [[11_VALKEY_READ_CACHE]] |
+| **View Scope & Company Switcher** | HQ overview / company & branch switcher, branch-scoped filtering, middleware, filtered screens | [[12_VIEW_SCOPE_COMPANY_SWITCHER]] |
 | **Project Structure & Style** | CQRS, Clean UI Frontend, Feature Layout, Tests Layer, Naming Rules, Agent Standards | [[10_PROJECT_STRUCTURE_AND_CODE_STYLE]] |
 
 ---
@@ -62,7 +62,8 @@ docs/architecture/
 ├── 08_DISASTER_RECOVERY_AND_RESILIENCY.md       # 🛡️ High Availability, DR & Partition Tolerance
 ├── 09_NETWORK_PORTS_AND_SECURITY_MATRIX.md      # 🔌 Network, Port, & Security Matrix
 ├── 10_PROJECT_STRUCTURE_AND_CODE_STYLE.md       # 📐 CQRS, Clean UI Pattern & Agent Code Style Guide
-└── 11_VALKEY_READ_CACHE.md                      # ⚡ Read-through cache + invalidation on write
+├── 11_VALKEY_READ_CACHE.md                      # ⚡ Read-through cache + invalidation on write
+└── 12_VIEW_SCOPE_COMPANY_SWITCHER.md            # 🏢 View Scope & Company/Branch Switcher
 ```
 
 ---
@@ -89,5 +90,6 @@ docs/architecture/
 - [[09_NETWORK_PORTS_AND_SECURITY_MATRIX|Chapter 9: Network, Ports & Security Matrix]]
 - [[10_PROJECT_STRUCTURE_AND_CODE_STYLE|Chapter 10: Project Structure & Code Style Guide]]
 - [[11_VALKEY_READ_CACHE|Chapter 11: Valkey Read Cache & Invalidation]]
+- [[12_VIEW_SCOPE_COMPANY_SWITCHER|Chapter 12: View Scope & Company/Branch Switcher]]
 - 📑 [[../programs/00_INDEX|Program Catalogue & Screen Specifications MOC]]
 

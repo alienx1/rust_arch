@@ -1,120 +1,120 @@
-# คู่มือ: เพิ่ม service ใหม่ (worker อ่าน Redpanda และ/หรือ API แยก)
+# Guide: Add a New Service (Redpanda Worker and/or Standalone API)
 
-ต้นแบบที่มีอยู่แล้วและให้ไล่ดูโค้ดได้:
+Existing services in the repository that serve as reference implementations:
 
-| service | หน้าที่ | โค้ด |
+| Service | Responsibility | Crates |
 |---|---|---|
-| **api-report** (:8001) | worker อ่าน `report.requests` → สร้างไฟล์ CSV → Garage; API ดู/ดาวน์โหลดรายงาน | `application/report`, `handler/api/report` |
-| **api-notification** (:8002) | อ่าน `notifications` → เก็บ DB → ผลักเข้าเบราว์เซอร์ทาง SSE | `application/notification`, `handler/api/notification` |
-| **api-master** (:8000) | API หลักของข้อมูล master / สิทธิ์ / audit | `application/master`, `handler/api/master` |
+| **api-report** (:8001) | Worker consuming `report.requests` → generates CSV files → uploads to Garage S3; REST API to list/preview/download reports | `application/report`, `handler/api/report` |
+| **api-notification** (:8002) | Consumes `notifications` → stores in DB → pushes real-time updates to browsers over SSE | `application/notification`, `handler/api/notification` |
+| **api-master** (:8000) | Primary API for master data, permissions, and audit logs | `application/master`, `handler/api/master` |
 
-## 0. ควรแยก service หรือเพิ่มใน api-master?
+## 0. Should It Be a Separate Service or Part of `api-master`?
 
-| แยกเป็น service ใหม่เมื่อ | เพิ่มใน api-master เมื่อ |
+| Create a Separate Service When | Keep in `api-master` When |
 |---|---|
-| มีงานเบื้องหลังยาว (สร้างไฟล์, ส่งอีเมล, ประมวลผลชุดใหญ่) | เป็น CRUD / อ่านเขียนข้อมูลปกติ |
-| ต้องสเกล/restart แยกจาก API หลัก | ใช้ตารางและสิทธิ์ชุดเดียวกับโปรแกรมที่มีอยู่ |
-| ถือ connection ค้าง (SSE, WebSocket) | request สั้น ๆ |
-| ล้มแล้วต้องไม่ลาก API หลักล้มตาม | |
+| Running long background jobs (file generation, email delivery, bulk processing) | Performing standard synchronous CRUD / data queries |
+| Needs independent scaling or restarts decoupled from the core API | Shares the exact same tables and permission checks as existing master programs |
+| Holds long-lived connections (SSE, WebSockets) | Serves short-lived HTTP requests |
+| A failure or crash must not impact `api-master` availability | |
 
-กฎเหล็ก: **service คุยกันผ่าน Redpanda (หรือฐานข้อมูล) ไม่เรียก HTTP หากัน** และส่ง "ข้อความ" ที่มี id ของตัวเองเสมอ
+Golden Rule: **Services communicate asynchronously through Redpanda (or shared database tables) — never via synchronous service-to-service HTTP calls**, and every published event message carries its own unique ID.
 
-## 1. สัญญากลาง — `application/core/src/traits/<ชื่อ>.rs`
+## 1. Shared Contract — `application/core/src/traits/<name>.rs`
 
 ```rust
-pub const MY_TOPIC: &str = "my.requests";          // ชื่อ topic
-pub const MY_WORKER_GROUP: &str = "my-worker";     // consumer group
+pub const MY_TOPIC: &str = "my.requests";          // Redpanda topic name
+pub const MY_WORKER_GROUP: &str = "my-worker";     // Consumer group ID
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct MyMessage { pub job_id: String, /* ข้อมูลที่ worker ต้องใช้ครบในตัว */ }
+pub struct MyMessage { pub job_id: String, /* self-contained payload required by the worker */ }
 ```
 
-- ข้อความต้อง **อ่านได้ด้วยตัวเอง** (ไม่ต้องกลับไปถามผู้ส่ง) และมี id (UUIDv7) ที่ใช้เป็น Kafka key
-- เพิ่มฟิลด์ใหม่ภายหลังต้อง `#[serde(default)]` เพื่อให้ข้อความเก่าใน topic ยังอ่านได้ (ดู `reprocess` ใน `ReportJobMessage`)
-- export ใน `traits/mod.rs`
-- ฝั่งผู้ส่ง (เช่น api-master): `EventService::publish(topic, Some(&id), &bytes)` — ถ้า broker ล่มให้ตอบ 503 ไม่ใช่ทำเป็นสำเร็จ
+- Messages must be **self-contained** (the worker should not need to call back to the producer) and carry a UUIDv7 identifier used as the Kafka message key.
+- Any fields added later must use `#[serde(default)]` so older messages in the topic remain deserializable (see `reprocess` on `ReportJobMessage`).
+- Re-export the module in `traits/mod.rs`.
+- Producer side (e.g. `api-master`): call `EventService::publish(topic, Some(&id), &bytes)` — if the broker is unreachable, return HTTP 503 rather than pretending the job succeeded.
 
-## 2. use case — `application/<svc>/`
+## 2. Application Use Cases — `application/<svc>/`
 
 ```text
 application/<svc>/
-├── Cargo.toml                  # name = "application-<svc>"  (เพิ่มใน [workspace] members + [workspace.dependencies] ที่ root)
-└── src/features/<program>/     # โครงเดียวกับ ADD_A_PROGRAM (commands/queries/models/errors)
-    └── commands/<x>_handler.rs # struct …Handler: impl EventHandler  → parse JSON → เรียก executor
+├── Cargo.toml                  # name = "application-<svc>"  (add to root [workspace] members + [workspace.dependencies])
+└── src/features/<program>/     # Same CQRS layout as ADD_A_PROGRAM (commands/queries/models/errors)
+    └── commands/<x>_handler.rs # struct …Handler: impl EventHandler → parses JSON → invokes executor
 ```
 
-- `EventHandler::handle(key, payload)`: **ห้าม panic และห้ามคืน error** — consumer commit offset หลัง `handle` จบเสมอ (at-least-once, ไม่มี poison message) ดังนั้น handler ต้อง **บันทึกความล้มเหลวของตัวเอง** (แถวสถานะ `failed` + ข้อความ) และ **idempotent** (ข้อความมาซ้ำ = ไม่ทำซ้ำ: ดู `run_report_job.rs` ที่ข้ามงานที่จบแล้ว)
-- ข้อความที่อ่านไม่ออก: log แล้วข้าม (อ่านซ้ำกี่ครั้งก็ไม่ออก)
-- ทดสอบด้วย mock ของ port ทั้งหมด (`application/report/tests/rppg000_test.rs` ใช้ storage/audit/notifier ในหน่วยความจำ)
-- อยากแจ้งผู้ใช้: ใช้ `NotificationService::notify(username, Notification{…})` (ส่งเข้า topic `notifications` ให้ api-notification เก็บและผลัก SSE; ยิงแล้วลืม ไม่บล็อกงาน)
+- `EventHandler::handle(key, payload)`: **must never panic and does not return an error** — the consumer always commits the offset after `handle` returns (at-least-once delivery, preventing poison-message loops). Consequently, the handler must **record its own failure state** (e.g. updating the job row to `failed` with an error message) and be **idempotent** (duplicate messages must be safely ignored — see `run_report_job.rs`, which skips already-completed jobs).
+- Unparseable messages: log a warning and skip (retrying malformed JSON will never succeed).
+- Write unit tests using in-memory mocks for all ports (`application/report/tests/rppg000_test.rs` uses in-memory storage, audit, and notification mocks).
+- To notify a user upon completion: call `NotificationService::notify(username, Notification{…})` (publishes to the `notifications` topic for `api-notification` to persist and push via SSE; fire-and-forget so it never blocks the job).
 
-## 3. binary — `handler/api/<svc>/`
+## 3. Binary Crate — `handler/api/<svc>/`
 
-คัดจาก `handler/api/report/` (มี `[lib]` + `src/lib.rs` เพื่อให้ `tests/` import ได้):
+Model after `handler/api/report/` (include `[lib]` + `src/lib.rs` so integration tests in `tests/` can import modules):
 
-| ไฟล์ | ทำอะไร |
+| File | Responsibility |
 |---|---|
-| `Cargo.toml` | `name = "api-<svc>"`, `[lib] name = "api_<svc>"`, `[[bin]]`; เพิ่ม member ที่ root |
-| `src/main.rs` | โหลด `.env`, tracing, อ่าน `<SVC>_HOST/PORT/PREFIX`, **graceful shutdown + watchdog 10 วินาที + Ctrl+C ซ้ำออกทันที** (กัน SSE/connection ค้างทำให้ปิดไม่ลง) |
-| `src/connection.rs` | ต่อ DB / Valkey / Kratos / adapter ที่ต้องใช้; ประกอบ executor; `spawn_worker` |
-| `src/routers/base_router.rs` | `/health`, `/livez`, `/readyz`; routes ของโปรแกรมครอบด้วย `require_kratos_session`; `cbor_error_responses`; CORS; trace |
-| `src/routers/<program>_router.rs` | router ที่รับ `State<Arc<dyn …Commands>>` เท่านั้น |
+| `Cargo.toml` | `name = "api-<svc>"`, `[lib] name = "api_<svc>"`, `[[bin]]`; register in root `Cargo.toml` |
+| `src/main.rs` | Load `.env`, initialize tracing, read `<SVC>_HOST/PORT/PREFIX`, configure **graceful shutdown + 10-second watchdog + immediate exit on second Ctrl+C** (prevents open SSE streams from hanging shutdown) |
+| `src/connection.rs` | Connect to DB / Valkey / Kratos / required adapters; assemble command executors; launch `spawn_worker` |
+| `src/routers/base_router.rs` | `/health`, `/livez`, `/readyz`; wrap program routes with `require_kratos_session`; `cbor_error_responses`; CORS; tracing |
+| `src/routers/<program>_router.rs` | Axum router consuming `State<Arc<dyn …Commands>>` only |
 
-worker อ่านข้อความ (ต้นแบบ `spawn_report_worker`):
+Background worker loop (modeled on `spawn_report_worker`):
 
 ```rust
 tokio::spawn(async move {
-    let consumer = RedpandaEventConsumer::new(&brokers);          // commit หลัง handler จบ
+    let consumer = RedpandaEventConsumer::new(&brokers);          // commits offset after handler completes
     let handler: Arc<dyn EventHandler> = Arc::new(MyHandler::new(commands));
     loop {
         if let Err(e) = consumer.consume(MY_TOPIC, MY_WORKER_GROUP, handler.clone()).await {
             error!(error = %e, "worker stopped, retrying in 5 s");
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;         // ต่อใหม่เมื่อ broker หลุด
+        tokio::time::sleep(Duration::from_secs(5)).await;         // reconnect on broker disconnect
     }
 });
 ```
 
-**Consumer group:** หลาย instance ที่ "แบ่งงานกัน" ใช้ group เดียวกัน (ข้อความหนึ่งถูกทำโดยตัวเดียว); instance ที่ "ต้องเห็นทุกข้อความ" (เช่น ผลัก SSE ถึงทุก session) ต้องมี group ของตัวเองต่อ instance (ดู `NOTIFICATION_CONSUMER_GROUP`)
+**Consumer group strategy:** Multiple instances that **share a work queue** use the same consumer group ID (each message is processed by one instance). Instances that **must each receive every message** (e.g. pushing SSE events to connected browser sessions) must use a unique consumer group per instance (see `NOTIFICATION_CONSUMER_GROUP`).
 
-## 4. ต่อเข้ากับระบบ
+## 4. Platform Integration
 
-| งาน | ที่ไหน |
+| Task | Where |
 |---|---|
-| รันตอน dev | `Makefile`: เพิ่ม `run-<svc>` / alias / (`dev-<svc>`) และใส่ใน `.PHONY` |
-| ตัวแปรแวดล้อม | `.env` และ `.env.example`: `<SVC>_HOST`, `<SVC>_PORT`, `<SVC>_PREFIX`, (`<SVC>_CONSUMER_GROUP`) |
-| topic | `Makefile` target `topics`: เพิ่มชื่อ topic ใน loop (รันซ้ำได้) — `make bootstrap` **ไม่** สร้าง topic ให้ |
-| เว็บเรียก service นี้ | `handler/web/application/master/Trunk.toml.tmpl` (**ไม่ใช่** `Trunk.toml` ซึ่งถูกสร้างจากเทมเพลต + `.env` ตอน `make web`): เพิ่ม `[[proxy]]` ของ prefix `/api/v1/<svc>/` → `@@<SVC>_URL@@@@<SVC>_PREFIX@@/` **ก่อน** รายการ `/api/v1/` (ตัวที่ยาวกว่าต้องมาก่อน) แล้วเพิ่มตัวแปรใน `gen-trunk-config.sh` และ `.env.example` |
-| พอร์ต/ความปลอดภัย | `docs/architecture/09_NETWORK_PORTS_AND_SECURITY_MATRIX.md` |
-| ดู event ใน ALPG000 | เพิ่มดัชนี Quickwit ของ topic (ไฟล์ใน `kube/arch/applications/arch_logging/indexes/` + ชื่อใน `make event-indexes`) แล้วเพิ่ม kind ใน `audit_kind` (ดู `event_stream_query.rs`) — ทำเมื่อต้องการค้นอีเวนต์ของ topic |
-| มอนิเตอร์/สั่งซ้ำ | ถ้าสถานะงานอยู่ในตาราง ให้ดูว่าควรให้ ALPG001 (Process Monitor) แสดงด้วยหรือไม่ |
+| Dev Make target | `Makefile`: add `run-<svc>` / alias / (`dev-<svc>`) and list in `.PHONY` |
+| Environment variables | `.env` and `.env.example`: `<SVC>_HOST`, `<SVC>_PORT`, `<SVC>_PREFIX`, (`<SVC>_CONSUMER_GROUP`) |
+| Redpanda topic | `Makefile` target `topics`: add topic name to the loop (idempotent) — note that `make bootstrap` does **not** create topics |
+| Web dev proxy | `handler/web/application/master/Trunk.toml.tmpl` (**not** `Trunk.toml`, which is generated from the template + `.env` during `make web`): add a `[[proxy]]` block for `/api/v1/<svc>/` → `@@<SVC>_URL@@@@<SVC>_PREFIX@@/` **before** the catch-all `/api/v1/` entry (longer prefixes must come first), and add the variables to `gen-trunk-config.sh` and `.env.example` |
+| Ports & security matrix | `docs/architecture/09_NETWORK_PORTS_AND_SECURITY_MATRIX.md` |
+| Inspect events in `ALPG000` | Add a Quickwit index for the topic (config under `kube/arch/applications/arch_logging/indexes/` + index name in `make event-indexes`) and add the kind to `audit_kind` (see `event_stream_query.rs`) if you want topic events searchable in the Audit Log UI |
+| Process monitoring / retry | If job status is tracked in a database table, consider exposing it in `ALPG001` (Process Monitor) |
 
-> ใน dev ทุก service รัน **บนเครื่อง** (cargo) ส่วน Postgres/Valkey/Redpanda/Kratos/Garage/Quickwit อยู่ใน k3d
-> repo นี้ **ยังไม่มี Dockerfile / manifest ของ service ตัวเอง** — ถ้าจะ deploy ใน cluster ต้องเพิ่มเอง (ดู [`PRODUCTION_CHECKLIST.md`](./PRODUCTION_CHECKLIST.md))
+> In development, all application services run **on the host** via `cargo`, while Postgres, Valkey, Redpanda, Kratos, Garage, and Quickwit run inside k3d.
+> This repository **does not yet include Dockerfiles or Kubernetes manifests for the Rust application services** — add them when deploying into a cluster (see [`PRODUCTION_CHECKLIST.md`](./PRODUCTION_CHECKLIST.md)).
 
-## 5. Infrastructure ใหม่ (เมื่อต้องใช้เทคโนโลยีใหม่)
+## 5. Adding New Infrastructure Adapters (When Introducing New Technology)
 
-1. ประกาศ **port (trait)** ใน `application/core/src/traits/` — ภาษาของโดเมน ไม่ใช่ของ driver
-2. เขียน adapter ใน `infrastructure/src/services/<ชื่อ>/` implement port นั้น (ไฟล์ละหน้าที่: `get.rs`, `del_prefix.rs` …)
-3. middleware ที่ใช้ร่วมกันหลาย service อยู่ใน `infrastructure/src/middleware/` แยกกลุ่มตามหน้าที่: `auth/` (api key, Kratos), `audit/`, `cache/`, `http/` (CORS, ภาษา, แปลข้อความ error) — ไฟล์ใหม่ใส่กลุ่มที่ตรง แล้ว re-export ใน `mod.rs` ของกลุ่มและของ `middleware/`
-4. `application/*` **ห้าม** import driver ตรง ๆ
+1. Define the **port (trait)** in `application/core/src/traits/` using domain language, never driver-specific types.
+2. Implement the adapter in `infrastructure/src/services/<name>/` (one file per operation: `get.rs`, `del_prefix.rs`, …).
+3. Shared middleware across services lives in `infrastructure/src/middleware/` organized by concern: `auth/` (API key, Kratos), `audit/`, `cache/`, `http/` (CORS, language negotiation, error translation) — place new middleware in the matching folder and re-export in its `mod.rs` and `middleware/mod.rs`.
+4. `application/*` crates must **never** import infrastructure drivers directly.
 
-## 6. เช็กลิสต์
+## 6. Verification Checklist
 
-- [ ] ส่งข้อความเข้า topic แล้ว worker ทำงาน: `kubectl -n arch exec deploy/arch-streaming -- rpk topic consume <topic> -n 5`
-- [ ] ข้อความซ้ำ/ข้อความเสีย ไม่ทำให้ worker ค้างหรือทำซ้ำ (มี test)
-- [ ] ปิดด้วย Ctrl+C ได้ภายในไม่กี่วินาที (ลองตอนมี SSE เปิดอยู่)
-- [ ] Redpanda ล่ม/restart แล้ว worker ต่อใหม่เอง (log "retrying in 5 s")
-- [ ] เว็บเรียกผ่าน Trunk proxy ได้ (`curl localhost:3000/api/v1/<svc>/…` ด้วยคุกกี้ล็อกอิน)
-- [ ] ผู้ใช้อื่นเข้าถึงข้อมูลของกันและกันไม่ได้ (เช็กความเป็นเจ้าของ ตอบ 404 ไม่ใช่ 403 เพื่อไม่เผยว่ามีอยู่ — แบบ api-report)
-- [ ] `docs/architecture/09_…` และ `docs/programs/…` อัปเดตแล้ว
+- [ ] Publishing a message to the topic triggers the worker: `kubectl -n arch exec deploy/arch-streaming -- rpk topic consume <topic> -n 5`
+- [ ] Duplicate or malformed messages do not hang the worker or cause duplicate side effects (covered by unit tests)
+- [ ] Pressing `Ctrl+C` shuts down cleanly within a few seconds (even with active SSE connections)
+- [ ] Restarting Redpanda causes the worker to reconnect automatically (logs `"retrying in 5 s"`)
+- [ ] Web UI requests route properly through the Trunk proxy (`curl localhost:3000/api/v1/<svc>/…` with a session cookie)
+- [ ] Users cannot access each other's resources (ownership checks return `404` rather than `403` to avoid leaking resource existence — same pattern as `api-report`)
+- [ ] Updated `docs/architecture/09_…` and `docs/programs/…`
 
-## 7. กับดักที่เจอมาแล้ว
+## 7. Common Pitfalls
 
-| อาการ | สาเหตุ / วิธีแก้ |
+| Symptom | Cause / Fix |
 |---|---|
-| Ctrl+C แล้ว service ไม่ยอมหยุด | SSE ที่เปิดค้างทำให้ `with_graceful_shutdown` ไม่จบ → ปิด stream ทั้งหมด (`close_all`) และใช้ watchdog |
-| ลิงก์ presigned ของ Garage "Invalid signature" ผ่าน dev proxy | proxy ตาม redirect เองแล้ว Host เปลี่ยน → ให้ API ตอบ **JSON `{url}`** ให้เบราว์เซอร์เปิดเอง ไม่ใช้ redirect |
-| topic หายหลัง Redpanda เกิดใหม่ | ปัจจุบันใช้ PVC แล้ว; ถ้าสร้าง cluster ใหม่ต้อง `make topics` |
-| ข้อความเก่าถูกประมวลผลย้อนหลังตอนตั้ง group ใหม่ | `RedpandaEventConsumer` ตั้ง `auto.offset.reset=earliest` — group ใหม่อ่านตั้งแต่ต้น topic; handler ต้อง idempotent และถ้าไม่ต้องการ ให้ใช้ชื่อ group เดิมต่อเนื่อง |
-| `nest("/")` ของ router ย่อยแล้ว proxy จับไม่ถูก | ใช้ path จริง เช่น `/items` |
+| Service hangs on `Ctrl+C` | Open SSE streams prevent `with_graceful_shutdown` from completing → close all active streams (`close_all`) and keep the shutdown watchdog timer |
+| Garage pre-signed URL fails with `"Invalid signature"` through dev proxy | The dev proxy follows HTTP redirects and rewrites the `Host` header → return **JSON `{url}`** from the API and let the browser open the pre-signed URL directly instead of redirecting |
+| Topic disappears after Redpanda pod recreation | Redpanda now uses a PVC; if recreating the entire cluster from scratch, run `make topics` |
+| Old messages are reprocessed when changing consumer group name | `RedpandaEventConsumer` sets `auto.offset.reset=earliest` — a brand-new consumer group reads from the beginning of the topic; keep handlers idempotent and preserve consumer group names across deployments |
+| Sub-router `nest("/")` fails to match through proxy | Mount under an explicit sub-path such as `/items` |

@@ -32,3 +32,4 @@ pub use su::supg002::{Supg002Page, Supg002ProgramPage};
 pub use su::supg003::{Supg003GroupPage, Supg003MatrixPage, Supg003Page};
 pub use su::supg004::{Supg004Page, Supg004UserPage};
 pub use su::supg005::Supg005Page;
+pub use su::supg006::Supg006Page;

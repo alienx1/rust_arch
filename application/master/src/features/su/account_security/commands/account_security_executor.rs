@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::AccountSecurityCommands;
 use crate::features::su::account_security::errors::AccountSecurityError;
 use crate::features::su::account_security::models::{
-    LoginState, PasswordMailKind, PasswordMailResult, SecuritySettings,
+    LoginState, PasswordMailKind, PasswordMailResult, PasswordPolicy, SecuritySettings, violations_text,
 };
 use crate::features::su::account_security::queries::AccountSecurityQueries;
 
@@ -75,19 +75,30 @@ impl AccountSecurityExecutor {
         }
     }
 
-    /// The settings in `su_configuration` (read through Valkey for a minute)
-    pub(super) async fn settings(&self) -> SecuritySettings {
+    /// The `security` rows of `su_configuration` (read through Valkey for a minute); `None` when
+    /// they cannot be read
+    async fn security_rows(&self) -> Option<HashMap<String, String>> {
         let cache = self.caches.ns(cache_ns::ACL).language_free();
         let key = cache.key("security_settings", &());
-        let rows = cache.through_key(key, cache_ttl::ACL, || self.queries.security_configuration()).await;
-        match rows {
-            Ok(rows) => SecuritySettings::from_rows(&rows),
+        match cache.through_key(key, cache_ttl::ACL, || self.queries.security_configuration()).await {
+            Ok(rows) => Some(rows),
             Err(e) => {
-                // Better the defaults than no lock at all
                 tracing::warn!("security settings not readable, using the defaults: {e}");
-                SecuritySettings::default()
+                None
             }
         }
+    }
+
+    /// The sign-in lock settings
+    pub(super) async fn settings(&self) -> SecuritySettings {
+        // Better the defaults than no lock at all
+        self.security_rows().await.map(|rows| SecuritySettings::from_rows(&rows)).unwrap_or_default()
+    }
+
+    /// The password policy
+    pub(super) async fn password_policy(&self) -> PasswordPolicy {
+        // Unreadable settings must not let a weak password through: the default policy applies
+        self.security_rows().await.map(|rows| PasswordPolicy::from_rows(&rows)).unwrap_or_default()
     }
 }
 
@@ -103,6 +114,11 @@ impl AccountSecurityCommands for AccountSecurityExecutor {
 
     async fn record_login_success(&self, identifier: &str) -> Result<(), AccountSecurityError> {
         self.clear_failures(identifier).await
+    }
+
+    async fn check_password(&self, username: &str, email: &str, password: &str) -> Result<Option<String>, AccountSecurityError> {
+        let violations = self.password_policy().await.violations(password, username, email);
+        Ok((!violations.is_empty()).then(|| violations_text(&violations)))
     }
 
     async fn account_name(&self, identifier: &str) -> String {
