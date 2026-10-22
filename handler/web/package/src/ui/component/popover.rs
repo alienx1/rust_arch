@@ -42,7 +42,7 @@ pub fn PopoverContent(
 ) -> impl IntoView {
     let open = use_context::<Signal<bool>>().expect("PopoverContent must be inside Popover");
 
-    let base = "absolute z-50 mt-2 w-72 rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95";
+    let base = "absolute z-50 mt-2 w-72 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg outline-none animate-in fade-in-0 zoom-in-95";
     let merged_class = tw_merge!(base, &class);
 
     view! {

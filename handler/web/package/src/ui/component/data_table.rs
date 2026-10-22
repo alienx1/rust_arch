@@ -239,9 +239,9 @@ pub fn DataTable(
     });
 
     view! {
-        <Card class="border-border/60 shadow-sm bg-card">
+        <Card class="shadow-sm overflow-hidden">
             <CardHeader class="pb-4 border-b border-border/40">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
                     <div>
                         <CardTitle class="text-lg font-semibold flex items-center gap-2">
                             {has_icon.then(|| view! {
@@ -254,7 +254,7 @@ pub fn DataTable(
                         {has_description.then(|| view! { <CardDescription>{description.clone()}</CardDescription> })}
                     </div>
 
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         {on_search.map(|on_search| view! {
                             <div class="w-56 sm:w-72">
                                 <SearchInput

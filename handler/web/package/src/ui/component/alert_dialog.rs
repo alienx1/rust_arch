@@ -16,7 +16,7 @@ pub fn AlertDialogContent(
     #[prop(optional, into)] class: String,
     children: Children,
 ) -> impl IntoView {
-    let base = "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg";
+    let base = "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-lg max-h-[calc(100dvh-1.5rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-4 shadow-lg duration-200 rounded-xl sm:p-6";
     let merged_class = tw_merge!(base, &class);
 
     view! {

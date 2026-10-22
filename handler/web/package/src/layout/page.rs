@@ -3,7 +3,7 @@ use tailwind_fuse::tw_merge;
 
 #[component]
 pub fn PageContainer(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
-    let base = "flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6 w-full";
+    let base = "flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 w-full";
     let merged_class = tw_merge!(base, &class);
 
     view! {

@@ -49,7 +49,7 @@ pub fn TabsTrigger(
 
     let current_class = move || {
         if active_tab.get() == val_for_class {
-            tw_merge!(base, "bg-background text-foreground shadow", &class)
+            tw_merge!(base, "bg-card text-foreground shadow-sm", &class)
         } else {
             tw_merge!(base, "hover:text-foreground", &class)
         }

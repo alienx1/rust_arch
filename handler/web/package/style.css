@@ -1,12 +1,18 @@
 /* Modern shadcn/ui Theme with OKLCH Color Space (Teal & Emerald Accent) */
 @layer base {
   :root {
-    --radius: 0.5rem;
+    --radius: 0.625rem;
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --shadow-xs: 0 1px 2px 0 oklch(0.2 0.02 190 / 5%);
+    --shadow-sm: 0 1px 2px 0 oklch(0.2 0.02 190 / 6%), 0 1px 3px 0 oklch(0.2 0.02 190 / 5%);
+    --shadow-md: 0 4px 12px -2px oklch(0.2 0.02 190 / 8%), 0 2px 4px -2px oklch(0.2 0.02 190 / 5%);
+    --shadow-lg: 0 16px 40px -12px oklch(0.2 0.02 190 / 18%), 0 4px 8px -4px oklch(0.2 0.02 190 / 6%);
     --font-sans: 'Inter', sans-serif;
 
     /* Base Surfaces */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.985 0.003 190);
+    --foreground: oklch(0.2 0.015 200);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
@@ -19,15 +25,15 @@
     /* Secondary & Muted */
     --secondary: oklch(0.967 0.001 286.375);
     --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
+    --muted: oklch(0.965 0.006 190);
+    --muted-foreground: oklch(0.52 0.015 200);
+    --accent: oklch(0.955 0.02 185);
     --accent-foreground: oklch(0.205 0 0);
 
     /* Borders & Inputs */
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --border: oklch(0.915 0.008 195);
+    --input: oklch(0.89 0.01 195);
+    --ring: oklch(0.62 0.1 186);
 
     /* Charts & Visualizations */
     --chart-1: oklch(0.855 0.138 181.071);
@@ -37,36 +43,41 @@
     --chart-5: oklch(0.437 0.078 188.216);
 
     /* Sidebar */
-    --sidebar: oklch(0.985 0 0);
+    --sidebar: oklch(0.99 0.004 190);
     --sidebar-primary: oklch(0.6 0.118 184.704);
     --sidebar-primary-foreground: oklch(0.984 0.014 180.72);
   }
 
   .dark {
     /* Base Surfaces */
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
+    --background: oklch(0.16 0.01 200);
+    --foreground: oklch(0.97 0.004 190);
+    --card: oklch(0.2 0.012 200);
     --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
+    --popover: oklch(0.22 0.012 200);
     --popover-foreground: oklch(0.985 0 0);
 
     /* Primary Accent: Deep Teal / Cyan */
-    --primary: oklch(0.437 0.078 188.216);
+    --primary: oklch(0.58 0.105 186);
     --primary-foreground: oklch(0.984 0.014 180.72);
 
     /* Secondary & Muted */
     --secondary: oklch(0.274 0.006 286.033);
     --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.371 0 0);
+    --muted: oklch(0.26 0.012 200);
+    --muted-foreground: oklch(0.72 0.014 195);
+    --accent: oklch(0.3 0.03 190);
     --accent-foreground: oklch(0.985 0 0);
 
     /* Borders & Inputs */
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: oklch(0.65 0.1 186);
+    --destructive: oklch(0.65 0.2 25);
+    --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 30%);
+    --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 35%);
+    --shadow-md: 0 4px 12px -2px oklch(0 0 0 / 40%);
+    --shadow-lg: 0 16px 40px -12px oklch(0 0 0 / 60%);
 
     /* Charts & Visualizations */
     --chart-1: oklch(0.855 0.138 181.071);
@@ -76,7 +87,7 @@
     --chart-5: oklch(0.437 0.078 188.216);
 
     /* Sidebar */
-    --sidebar: oklch(0.18 0 0);
+    --sidebar: oklch(0.185 0.012 200);
     --sidebar-primary: oklch(0.704 0.14 182.503);
     --sidebar-primary-foreground: oklch(0.277 0.046 192.524);
   }
@@ -88,4 +99,14 @@
    utility class (`border-border`, `border-destructive/20` ...) still wins over this. */
 html *, html ::before, html ::after {
   border-color: var(--border);
+}
+
+/* Base typography & polish */
+html { -webkit-text-size-adjust: 100%; }
+body { font-feature-settings: 'cv11', 'ss01', 'calt'; text-rendering: optimizeLegibility; }
+::selection { background: color-mix(in oklch, var(--primary) 25%, transparent); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent; }
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

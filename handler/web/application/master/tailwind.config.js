@@ -4,6 +4,16 @@
 //
 // A class name must appear in the source as ONE complete string ("bg-primary text-white"):
 // building it with format!("w-{n}") produces nothing. List such names in `safelist` instead.
+
+// Theme colours are CSS variables (package/style.css). Tailwind can only apply an opacity modifier
+// (`bg-primary/10`, `border-border/60`) to a colour it can decompose, so wrap each variable: with a
+// modifier the colour is mixed with transparent (works for oklch), without one it stays the plain var.
+const v = (name) => ({ opacityValue }) =>
+  // Plain utilities (no modifier) get undefined or the `var(--tw-*-opacity)` placeholder: keep the var.
+  opacityValue === undefined || Number.isNaN(Number(opacityValue)) || Number(opacityValue) === 1
+    ? `var(--${name})`
+    : `color-mix(in oklch, var(--${name}) ${Math.round(Number(opacityValue) * 100)}%, transparent)`;
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -17,48 +27,48 @@ module.exports = {
     theme: {
       extend: {
         colors: {
-          border: 'var(--border)',
-          input: 'var(--input)',
-          ring: 'var(--ring)',
-          background: 'var(--background)',
-          foreground: 'var(--foreground)',
+          border: v('border'),
+          input: v('input'),
+          ring: v('ring'),
+          background: v('background'),
+          foreground: v('foreground'),
           primary: {
-            DEFAULT: 'var(--primary)',
-            foreground: 'var(--primary-foreground)',
+            DEFAULT: v('primary'),
+            foreground: v('primary-foreground'),
           },
           secondary: {
-            DEFAULT: 'var(--secondary)',
-            foreground: 'var(--secondary-foreground)',
+            DEFAULT: v('secondary'),
+            foreground: v('secondary-foreground'),
           },
           destructive: {
-            DEFAULT: 'oklch(0.577 0.245 27.325)',
-            foreground: 'oklch(0.985 0 0)',
+            DEFAULT: v('destructive'),
+            foreground: v('destructive-foreground'),
           },
           muted: {
-            DEFAULT: 'var(--muted)',
-            foreground: 'var(--muted-foreground)',
+            DEFAULT: v('muted'),
+            foreground: v('muted-foreground'),
           },
           accent: {
-            DEFAULT: 'var(--accent)',
-            foreground: 'var(--accent-foreground)',
+            DEFAULT: v('accent'),
+            foreground: v('accent-foreground'),
           },
           popover: {
-            DEFAULT: 'var(--popover)',
-            foreground: 'var(--popover-foreground)',
+            DEFAULT: v('popover'),
+            foreground: v('popover-foreground'),
           },
           card: {
-            DEFAULT: 'var(--card)',
-            foreground: 'var(--card-foreground)',
+            DEFAULT: v('card'),
+            foreground: v('card-foreground'),
           },
           sidebar: {
-            DEFAULT: 'var(--sidebar)',
-            foreground: 'var(--foreground)',
-            primary: 'var(--sidebar-primary)',
-            'primary-foreground': 'var(--sidebar-primary-foreground)',
-            accent: 'var(--accent)',
-            'accent-foreground': 'var(--accent-foreground)',
-            border: 'var(--border)',
-            ring: 'var(--ring)',
+            DEFAULT: v('sidebar'),
+            foreground: v('foreground'),
+            primary: v('sidebar-primary'),
+            'primary-foreground': v('sidebar-primary-foreground'),
+            accent: v('accent'),
+            'accent-foreground': v('accent-foreground'),
+            border: v('border'),
+            ring: v('ring'),
           },
         },
         borderRadius: {
@@ -66,6 +76,17 @@ module.exports = {
           md: 'calc(var(--radius) - 2px)',
           sm: 'calc(var(--radius) - 4px)',
         },
+        boxShadow: {
+          xs: 'var(--shadow-xs)',
+          sm: 'var(--shadow-sm)',
+          DEFAULT: 'var(--shadow-sm)',
+          md: 'var(--shadow-md)',
+          lg: 'var(--shadow-lg)',
+        },
+        keyframes: {
+          'fade-in': { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
+        },
+        animation: { 'fade-in': 'fade-in 0.18s ease-out' },
         fontFamily: {
           sans: ['Inter', 'sans-serif'],
         },

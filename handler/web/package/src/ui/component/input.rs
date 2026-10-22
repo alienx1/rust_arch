@@ -12,7 +12,7 @@ pub fn Input(
     #[prop(optional)] on_input: Option<Callback<String>>,
 ) -> impl IntoView {
     let input_type = r#type.unwrap_or_else(|| "text".to_string());
-    let base = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+    let base = "flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:border-ring focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
     let merged_class = tw_merge!(base, &class);
 
     view! {
@@ -40,7 +40,7 @@ pub fn SearchInput(
     #[prop(optional)] disabled: bool,
     #[prop(optional)] on_input: Option<Callback<String>>,
 ) -> impl IntoView {
-    let base = "flex h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+    let base = "flex h-9 w-full rounded-md border border-input bg-card pl-9 pr-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:border-ring focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
     let merged_class = tw_merge!(base, &class);
     let input_placeholder = placeholder.unwrap_or_else(|| "Search...".to_string());
 

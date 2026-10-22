@@ -9,7 +9,7 @@ pub fn Dialog(
     children: ChildrenFn,
 ) -> impl IntoView {
     let overlay_base = "fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in";
-    let content_base = "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg";
+    let content_base = "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-1.5rem)] max-w-lg max-h-[calc(100dvh-1.5rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-4 shadow-lg duration-200 rounded-xl sm:p-6";
     let merged_content = tw_merge!(content_base, &class);
 
     view! {

@@ -15,12 +15,12 @@ pub enum ButtonVariant {
 impl ButtonVariant {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Default => "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+            Self::Default => "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:bg-primary/95",
             Self::Destructive => {
                 "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
             }
             Self::Outline => {
-                "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground"
+                "border border-input bg-card shadow-xs hover:bg-accent hover:text-accent-foreground"
             }
             Self::Secondary => {
                 "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80"
@@ -62,7 +62,7 @@ pub fn Button(
     children: Children,
 ) -> impl IntoView {
     let button_type = r#type.unwrap_or_else(|| "button".to_string());
-    let base = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
+    let base = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
     let merged_class = tw_merge!(base, variant.as_str(), size.as_str(), &class);
 
     view! {

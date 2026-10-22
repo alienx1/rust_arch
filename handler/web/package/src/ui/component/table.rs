@@ -18,7 +18,7 @@ pub fn Table(#[prop(optional, into)] class: String, children: Children) -> impl 
 
 #[component]
 pub fn TableHeader(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
-    let base = "[&_tr]:border-b border-border bg-muted/40";
+    let base = "[&_tr]:border-b border-border bg-muted/50";
     let merged_class = tw_merge!(base, &class);
 
     view! {
@@ -55,7 +55,7 @@ pub fn TableFooter(#[prop(optional, into)] class: String, children: Children) ->
 #[component]
 pub fn TableRow(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
     let base =
-        "border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted";
+        "border-b border-border transition-colors hover:bg-accent/60 data-[state=selected]:bg-muted";
     let merged_class = tw_merge!(base, &class);
 
     view! {
@@ -67,7 +67,7 @@ pub fn TableRow(#[prop(optional, into)] class: String, children: Children) -> im
 
 #[component]
 pub fn TableHead(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
-    let base = "h-10 px-4 text-left align-middle whitespace-nowrap font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0";
+    let base = "h-10 px-4 text-left align-middle whitespace-nowrap text-xs font-medium uppercase tracking-wide text-muted-foreground [&:has([role=checkbox])]:pr-0";
     let merged_class = tw_merge!(base, &class);
 
     view! {

@@ -13,9 +13,9 @@ pub fn Sidebar(
     children: Children,
 ) -> impl IntoView {
     // Below `md` the sidebar is a fixed off-canvas drawer; from `md` it is a static column.
-    let base = "fixed inset-y-0 left-0 z-40 flex h-dvh w-64 max-w-[85vw] flex-col border-r border-border bg-sidebar shadow-xl transition-all duration-300 select-none md:static md:z-30 md:h-screen md:max-w-none md:translate-x-0 md:shadow-none";
+    let base = "fixed inset-y-0 left-0 z-40 flex h-dvh w-64 max-w-[85vw] flex-col border-r border-border bg-sidebar shadow-lg transition-all duration-300 select-none lg:static lg:z-30 lg:h-dvh lg:max-w-none lg:translate-x-0 lg:shadow-none";
     let width_class = move || {
-        if is_collapsed.get() { "md:w-16" } else { "md:w-64" }
+        if is_collapsed.get() { "lg:w-16" } else { "lg:w-64" }
     };
     let slide_class = move || {
         if mobile_open.get() { "translate-x-0" } else { "-translate-x-full" }
@@ -100,13 +100,13 @@ pub fn SidebarCollapsibleGroup(
 
     view! {
         <div>
-            <div class=move || if is_collapsed.get() { "hidden md:block mx-2 my-2 border-t border-border" } else { "hidden" }></div>
+            <div class=move || if is_collapsed.get() { "hidden lg:block mx-2 my-2 border-t border-border" } else { "hidden" }></div>
             <button
                 type="button"
                 title=title
                 class=move || format!(
                     "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground {}",
-                    if is_collapsed.get() { "md:hidden" } else { "" }
+                    if is_collapsed.get() { "lg:hidden" } else { "" }
                 )
                 aria-expanded=move || open.get().to_string()
                 on:click=move |_| set_open.update(|v| *v = !*v)
@@ -137,9 +137,9 @@ pub fn SidebarCollapsibleGroup(
                 match (is_collapsed.get(), folded) {
                     (false, false) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5",
                     (false, true) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5 hidden",
-                    (true, false) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5 md:mx-0 md:mt-0 md:border-0 md:pl-0",
+                    (true, false) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5 lg:mx-0 lg:mt-0 lg:border-0 lg:pl-0",
                     // Folded group in the icon-only sidebar: its icons stay visible
-                    (true, true) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5 hidden md:!block md:mx-0 md:mt-0 md:border-0 md:pl-0",
+                    (true, true) => "mx-4 mt-1 space-y-1 border-l border-border pl-2.5 hidden lg:!block lg:mx-0 lg:mt-0 lg:border-0 lg:pl-0",
                 }
             }>
                 {children()}
@@ -179,7 +179,7 @@ pub fn SidebarMenuItem(
         }
     };
     let merged_class = move || {
-        let collapsed = if is_collapsed.get() { "md:justify-center md:px-0" } else { "" };
+        let collapsed = if is_collapsed.get() { "lg:justify-center lg:px-0" } else { "" };
         tw_merge!(base, active_class(), collapsed, &class)
     };
     let title = label.clone();
@@ -191,11 +191,11 @@ pub fn SidebarMenuItem(
                 <div class="flex items-center gap-3 truncate">
                     {icon.map(|ic| ic.run())}
                     {(!icon_name.is_empty()).then(|| view! { <NavIcon name=icon_name.clone() class="h-4 w-4 shrink-0" /> })}
-                    <span class=move || if is_collapsed.get() { "truncate md:hidden" } else { "truncate" }>{label}</span>
+                    <span class=move || if is_collapsed.get() { "truncate lg:hidden" } else { "truncate" }>{label}</span>
                 </div>
                 {badge.map(|b| {
                     view! {
-                        <span class=move || if is_collapsed.get() { "ml-auto flex md:hidden h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-semibold text-secondary-foreground" } else { "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-semibold text-secondary-foreground" }>
+                        <span class=move || if is_collapsed.get() { "ml-auto flex lg:hidden h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-semibold text-secondary-foreground" } else { "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-semibold text-secondary-foreground" }>
                             {b}
                         </span>
                     }

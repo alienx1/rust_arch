@@ -70,7 +70,7 @@ pub fn NotificationBell() -> impl IntoView {
                 }}
             </button>
             <Show when=move || open.get()>
-                <div class="absolute right-0 z-50 mt-2 w-[360px] max-w-[calc(100vw-2rem)] rounded-md border border-border bg-background shadow-lg">
+                <div class="fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-y-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[360px] rounded-lg border border-border bg-background shadow-lg">
                     <div class="flex items-center justify-between px-3 py-2 border-b border-border">
                         <span class="text-sm font-semibold">{t_or("ntpg000.bell.title", "การแจ้งเตือน")}</span>
                         <button

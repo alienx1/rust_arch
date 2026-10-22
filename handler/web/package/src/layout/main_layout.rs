@@ -117,7 +117,7 @@ pub fn MainLayout(
             sidebar=move || view! {
                 <Show when=move || mobile_open.get()>
                     <div
-                        class="fixed inset-0 z-30 bg-black/50 md:hidden"
+                        class="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden"
                         on:click=move |_| set_mobile_open.set(false)
                     ></div>
                 </Show>

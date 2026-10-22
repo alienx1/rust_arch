@@ -39,7 +39,7 @@ pub fn MainTopbar(
             <HeaderLeft>
                 <button
                     type="button"
-                    class="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors cursor-pointer md:hidden"
+                    class="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors cursor-pointer lg:hidden"
                     on:click=move |_| on_toggle_mobile_menu.run(())
                     title="Menu"
                     aria-label="Open menu"
@@ -52,7 +52,7 @@ pub fn MainTopbar(
                 </button>
                 <button
                     type="button"
-                    class="hidden md:block p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+                    class="hidden lg:block p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
                     on:click=move |_| on_toggle_sidebar.run(())
                     title="Toggle Sidebar"
                 >

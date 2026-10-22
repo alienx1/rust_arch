@@ -3,7 +3,7 @@ use tailwind_fuse::tw_merge;
 
 #[component]
 pub fn Card(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
-    let base = "rounded-xl border border-border bg-card text-card-foreground shadow";
+    let base = "rounded-xl border border-border bg-card text-card-foreground shadow-sm";
     let merged_class = tw_merge!(base, &class);
 
     view! {

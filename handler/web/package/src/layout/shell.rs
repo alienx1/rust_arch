@@ -8,7 +8,7 @@ pub fn AppShell(
     #[prop(into)] header: ViewFn,
     children: Children,
 ) -> impl IntoView {
-    let base = "flex h-screen w-full overflow-hidden bg-background";
+    let base = "flex h-dvh w-full overflow-hidden bg-background";
     let merged_class = tw_merge!(base, &class);
 
     view! {

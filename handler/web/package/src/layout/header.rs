@@ -3,7 +3,7 @@ use tailwind_fuse::tw_merge;
 
 #[component]
 pub fn Header(#[prop(optional, into)] class: String, children: Children) -> impl IntoView {
-    let base = "sticky top-0 z-20 flex h-14 w-full items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60";
+    let base = "sticky top-0 z-20 flex h-14 w-full items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md";
     let merged_class = tw_merge!(base, &class);
 
     view! {

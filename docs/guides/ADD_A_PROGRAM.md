@@ -130,7 +130,8 @@ pages/xx/xxpgnnn/
 | Menu item does not appear | Forgot to run `make seed`; user's group lacks `READ` permission; or program has `active=false` (sidebar menu is cached for 60s — run `make cache-flush`) |
 | API returns 404 despite router registration | Forgot the second `.nest` in `base_router.rs` under `/api/v1…`; requests via Trunk proxy must start with `/api/v1/` |
 | Sub-router `/` route is misinterpreted by proxy | Use `/items` instead of `/` (encountered in `api-notification`) |
-| `bg-primary/10` or `border-border/60` renders no color | Theme colors use CSS variables `var(--…)` where Tailwind 3 alpha modifiers do not work → use `bg-[color-mix(in_oklch,var(--primary)_12%,transparent)]` |
+| `bg-primary/10` or `border-border/60` | Works: `tailwind.config.js` wraps every theme colour so an opacity modifier becomes `color-mix(in oklch, var(--x) N%, transparent)`. Use the `/NN` utilities, not hand-written `color-mix` |
+| Layout breaks on a tablet / phone | The sidebar is an off-canvas drawer below `lg` (1024px) and a static column from `lg`; use `sm:`/`md:`/`lg:` mobile-first, wide tables scroll inside their card (`min-w-*` on the table), overlays use `w-[calc(100%-1.5rem)]` and `max-h-[calc(100dvh-1.5rem)]` so they never touch the screen edge. Check a program at 390px, 820px and 1280px, light and dark |
 | Dynamically formatted Tailwind classes (`format!("w-{n}")`) have no effect | Tailwind scans source files statically for complete class names: write full literals (`"w-4"`, `"w-8"`) or add them to `safelist` in `tailwind.config.js` |
 | Web UI still shows old code | Trunk is still compiling the WASM bundle or the browser cached it — wait for build completion and hard reload (`Ctrl+Shift+R`) |
 | Adding a `web-sys` API fails to compile | Enable the corresponding `web-sys` feature flag in `Cargo.toml` of `handler/web/package` and/or `handler/web/application/master` |

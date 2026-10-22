@@ -69,13 +69,13 @@ pub fn MainSidebar(
                                             <img src=url alt="" class="h-8 w-8 shrink-0 rounded-lg object-contain ring-1 ring-border bg-background" />
                                         }.into_any(),
                                         None => view! {
-                                            <div class="h-8 w-8 shrink-0 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shadow-sm ring-1 ring-primary/20">
+                                            <div class="h-8 w-8 shrink-0 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shadow-sm ring-1 ring-primary/30">
                                                 {shown_initial}
                                             </div>
                                         }.into_any(),
                                     }}
                                 </a>
-                                <div class=move || if is_collapsed.get() { "flex flex-col min-w-0 flex-1 md:hidden" } else { "flex flex-col min-w-0 flex-1" }>
+                                <div class=move || if is_collapsed.get() { "flex flex-col min-w-0 flex-1 lg:hidden" } else { "flex flex-col min-w-0 flex-1" }>
                                     <a href="/" class="text-sm font-semibold tracking-tight truncate">{shown_name}</a>
                                     {subtitle_line}
                                 </div>
@@ -116,7 +116,7 @@ pub fn MainSidebar(
                     <div class="flex items-center justify-between text-xs text-muted-foreground">
                         <span class="flex items-center gap-2">
                             <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span class=move || if is_collapsed.get() { "md:hidden" } else { "" }>{label.clone()}</span>
+                            <span class=move || if is_collapsed.get() { "lg:hidden" } else { "" }>{label.clone()}</span>
                         </span>
                     </div>
                 </SidebarFooter>

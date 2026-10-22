@@ -16,7 +16,7 @@ pub fn Select(
     #[prop(optional, into)] on_change: Option<Callback<String>>,
     children: Children,
 ) -> impl IntoView {
-    let base = "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer";
+    let base = "flex h-9 w-full items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus:outline-none focus:ring-[3px] focus:ring-ring/30 focus:border-ring focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer";
     let merged_class = tw_merge!(base, &class);
 
     view! {
