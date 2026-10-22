@@ -140,7 +140,12 @@ impl Dbpg002Commands for MockDbpg002Commands {
         &self,
         cmd: CreateDepartmentCommand,
         _actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
+        // What the real executor does: a default permission group needs the right to assign groups
+        if cmd.default_permission_group_id.is_some() && !may_assign_groups {
+            return Err(Dbpg002Error::NotAllowed("needs the right to assign permission groups".to_string()));
+        }
         if cmd.code.trim().is_empty() {
             return Err(Dbpg002Error::Validation("Department code is required".to_string()));
         }
@@ -152,7 +157,12 @@ impl Dbpg002Commands for MockDbpg002Commands {
         _id: Uuid,
         cmd: UpdateDepartmentCommand,
         _actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
+        // The mock department has no default, so any default in the request is a change
+        if cmd.default_permission_group_id.is_some() && !may_assign_groups {
+            return Err(Dbpg002Error::NotAllowed("needs the right to assign permission groups".to_string()));
+        }
         if cmd.row_version != 1 {
             return Err(Dbpg002Error::VersionConflict);
         }

@@ -107,12 +107,12 @@ notification: run-notification ## Alias for run-notification
 
 topics: ## Create the Redpanda topics the services use (idempotent)
 	@for t in report.requests notifications; do \
-		kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create $$t -p 1 2>&1 | grep -v "TOPIC_ALREADY_EXISTS" | tail -1; \
+		kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create $$t -p 1 2>&1 | grep -v "TOPIC_ALREADY_EXISTS\|terminated with exit code" | tail -1; \
 	done
 	@# mail-outbox carries one-time password links: kept 1 hour only, and not indexed into Quickwit
-	@kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create mail-outbox -p 1 -c retention.ms=3600000 2>&1 | grep -v "TOPIC_ALREADY_EXISTS" | tail -1
+	@kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create mail-outbox -p 1 -c retention.ms=3600000 2>&1 | grep -v "TOPIC_ALREADY_EXISTS\|terminated with exit code" | tail -1
 	@# notification-live: "your save went through", pushed to open sessions and never stored; 1 hour, not indexed
-	@kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create notification-live -p 1 -c retention.ms=3600000 2>&1 | grep -v "TOPIC_ALREADY_EXISTS" | tail -1
+	@kubectl -n $(NS) exec deploy/arch-streaming -- rpk topic create notification-live -p 1 -c retention.ms=3600000 2>&1 | grep -v "TOPIC_ALREADY_EXISTS\|terminated with exit code" | tail -1
 	@$(MAKE) -s event-indexes
 
 QUICKWIT_URL ?= http://localhost:7280

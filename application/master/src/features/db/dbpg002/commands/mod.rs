@@ -80,19 +80,26 @@ pub trait Dbpg002Commands: Send + Sync {
         actor_id: Option<Uuid>,
     ) -> Result<BranchDto, Dbpg002Error>;
 
-    /// Create a department under a branch
+    /// Create a department under a branch. `may_assign_groups` says whether the caller may assign
+    /// permission groups to accounts (SUPG004): a default permission group needs it.
     async fn create_department(
         &self,
         cmd: CreateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error>;
 
-    /// Update a department (optionally moving it to another branch) with optimistic lock
+    /// Update a department (optionally moving it to another branch) with optimistic lock.
+    /// Setting or changing its default permission group grants that group to the department's
+    /// accounts, so it is refused (`NotAllowed`) unless `may_assign_groups` (SUPG004 WRITE); leaving
+    /// the default as it is, or clearing it, grants nothing. The check runs on the row at the
+    /// version the caller loaded (after the optimistic lock), so nothing can change under it.
     async fn update_department(
         &self,
         id: Uuid,
         cmd: UpdateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error>;
 
     /// Hard-delete a branch with its labels and address/contact groups; refused for the headquarter

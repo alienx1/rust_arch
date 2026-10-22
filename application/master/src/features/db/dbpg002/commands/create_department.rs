@@ -19,7 +19,15 @@ impl Dbpg002CommandExecutor {
         &self,
         cmd: CreateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
+        // A default permission group is given to the department's accounts: it needs the right to
+        // assign groups, not only to manage departments
+        if cmd.default_permission_group_id.is_some() && !may_assign_groups {
+            return Err(Dbpg002Error::NotAllowed(
+                "Setting a default permission group needs the right to assign permission groups".to_string(),
+            ));
+        }
         let code = required(&cmd.code, "Department code")?.to_uppercase();
         let (name_th, name_en) = names_for_create(&cmd.name_th, &cmd.name_en)?;
 

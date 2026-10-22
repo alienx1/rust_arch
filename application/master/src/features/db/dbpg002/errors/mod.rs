@@ -20,6 +20,10 @@ pub enum Dbpg002Error {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    /// The caller may not do this part of the request (e.g. hand out a permission group)
+    #[error("Not allowed: {0}")]
+    NotAllowed(String),
+
     #[error("In use: {0}")]
     InUse(String),
 

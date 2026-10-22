@@ -23,6 +23,7 @@ impl Dbpg002CommandExecutor {
         id: Uuid,
         cmd: UpdateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
         let code = required(&cmd.code, "Department code")?.to_uppercase();
 
@@ -68,6 +69,14 @@ impl Dbpg002CommandExecutor {
         am.default_permission_group_id = Set(cmd.default_permission_group_id);
         am.change_by = Set(actor_id);
         update_versioned(&txn, am, (db_department::Column::Id, db_department::Column::RowVersion), id, cmd.row_version).await?;
+        // Checked after the optimistic lock: `default_changed` was read from the row at exactly the
+        // version this save carries, so the decision and the write see the same state. Refusing
+        // here drops the transaction (nothing is saved).
+        if default_changed && cmd.default_permission_group_id.is_some() && !may_assign_groups {
+            return Err(Dbpg002Error::NotAllowed(
+                "Changing the default permission group needs the right to assign permission groups".to_string(),
+            ));
+        }
 
         let name_th = cmd.name_th.trim().to_string();
         if !name_th.is_empty() {

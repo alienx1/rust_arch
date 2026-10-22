@@ -104,8 +104,9 @@ impl Dbpg002Commands for Dbpg002CommandExecutor {
         &self,
         cmd: CreateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
-        self.create_department(cmd, actor_id).await
+        self.create_department(cmd, actor_id, may_assign_groups).await
     }
 
     async fn update_department(
@@ -113,8 +114,9 @@ impl Dbpg002Commands for Dbpg002CommandExecutor {
         id: Uuid,
         cmd: UpdateDepartmentCommand,
         actor_id: Option<Uuid>,
+        may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
-        self.update_department(id, cmd, actor_id).await
+        self.update_department(id, cmd, actor_id, may_assign_groups).await
     }
 
     async fn delete_branch(&self, id: Uuid) -> Result<(), Dbpg002Error> {

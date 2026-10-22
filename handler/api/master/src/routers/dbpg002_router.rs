@@ -78,6 +78,7 @@ impl IntoResponse for Dbpg002ApiError {
                     .to_string(),
             ),
             Dbpg002Error::InUse(msg) => (StatusCode::CONFLICT, "IN_USE", msg.clone()),
+            Dbpg002Error::NotAllowed(msg) => (StatusCode::FORBIDDEN, "FORBIDDEN", msg.clone()),
             Dbpg002Error::Validation(msg) => {
                 (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg.clone())
             }
@@ -277,14 +278,10 @@ pub async fn create_department_handler(
         Ok(actor) => actor,
         Err(denied) => return Ok(denied),
     };
-    // A default permission group is given to the department's accounts: that is assigning a group
-    // to accounts, which needs the same right as on the user accounts page (SUPG004 WRITE)
-    if cmd.default_permission_group_id.is_some()
-        && let Err(denied) = require(&access, &user, "SUPG004", PermissionAction::Write).await
-    {
-        return Ok(denied);
-    }
-    Ok(wire.respond(commands.create_department(cmd, Some(actor.user_id)).await?))
+    // Whether the caller may also assign permission groups (SUPG004 WRITE): the command layer
+    // needs it for a default permission group (it reaches every account of the department)
+    let may_assign_groups = require(&access, &user, "SUPG004", PermissionAction::Write).await.is_ok();
+    Ok(wire.respond(commands.create_department(cmd, Some(actor.user_id), may_assign_groups).await?))
 }
 
 /// Update department
@@ -304,18 +301,8 @@ pub async fn update_department_handler(
     if let Err(denied) = require_unit(&access, &user, PROGRAM, PermissionAction::Write, ScopeLevel::Branch, cmd.branch_id).await {
         return Ok(denied);
     }
-    // Setting or changing the default permission group grants it to the department's accounts, so
-    // it needs the right to assign groups (SUPG004 WRITE); leaving it as it is, or clearing it,
-    // grants nothing and stays a DBPG002 matter
-    if let Some(new_default) = cmd.default_permission_group_id {
-        let current = commands.get_department_by_id(id).await?.and_then(|d| d.default_permission_group_id);
-        if current != Some(new_default)
-            && let Err(denied) = require(&access, &user, "SUPG004", PermissionAction::Write).await
-        {
-            return Ok(denied);
-        }
-    }
-    Ok(wire.respond(commands.update_department(id, cmd, Some(actor.user_id)).await?))
+    let may_assign_groups = require(&access, &user, "SUPG004", PermissionAction::Write).await.is_ok();
+    Ok(wire.respond(commands.update_department(id, cmd, Some(actor.user_id), may_assign_groups).await?))
 }
 
 /// Delete department (owned labels go with it; 409 when still referenced)

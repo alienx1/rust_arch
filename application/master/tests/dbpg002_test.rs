@@ -192,6 +192,7 @@ impl Dbpg002Commands for MockDbpg002Commands {
         &self,
         cmd: CreateDepartmentCommand,
         _actor_id: Option<Uuid>,
+        _may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
         let parent = self
             .branches
@@ -210,6 +211,7 @@ impl Dbpg002Commands for MockDbpg002Commands {
         id: Uuid,
         cmd: UpdateDepartmentCommand,
         _actor_id: Option<Uuid>,
+        _may_assign_groups: bool,
     ) -> Result<DepartmentDto, Dbpg002Error> {
         let existing = self
             .departments
@@ -316,11 +318,11 @@ async fn test_create_department_uppercases_and_rejects_duplicate() {
         default_permission_group_id: None,
     };
 
-    let created = mock.create_department(cmd("acc"), None).await.unwrap();
+    let created = mock.create_department(cmd("acc"), None, true).await.unwrap();
     assert_eq!(created.code, "ACC");
     assert_eq!(created.branch_id, hq_id);
 
-    let dup = mock.create_department(cmd("it"), None).await.unwrap_err();
+    let dup = mock.create_department(cmd("it"), None, true).await.unwrap_err();
     assert!(matches!(dup, Dbpg002Error::DuplicateCode(_)));
 }
 
@@ -338,11 +340,11 @@ async fn test_update_department_checks_row_version() {
         row_version,
     };
 
-    let updated = mock.update_department(dept.id, cmd(1), None).await.unwrap();
+    let updated = mock.update_department(dept.id, cmd(1), None, true).await.unwrap();
     assert_eq!(updated.code, "IT2");
     assert_eq!(updated.row_version, 2);
 
-    let stale = mock.update_department(dept.id, cmd(9), None).await.unwrap_err();
+    let stale = mock.update_department(dept.id, cmd(9), None, true).await.unwrap_err();
     assert!(matches!(stale, Dbpg002Error::VersionConflict));
 }
 
