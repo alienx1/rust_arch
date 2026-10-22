@@ -38,3 +38,6 @@ async-trait = { workspace = true }
 subtle = { workspace = true }
 reqwest = { workspace = true }
 serde_urlencoded = "0.7"
+
+[dev-dependencies]
+sea-orm = { workspace = true, features = ["mock"] }

@@ -13,6 +13,13 @@ pub struct CompanyOptionDto {
     pub name_en: String,
 }
 
+/// Permission group for the department's default-group selector
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PermissionGroupOptionDto {
+    pub id: Uuid,
+    pub code: String,
+}
+
 /// Branch type (`branch_type` master lookup: HEAD / BRANCH)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BranchTypeLookupDto {

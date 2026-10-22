@@ -47,6 +47,7 @@ Screen for managing ERP user accounts (`su_user`), assigning permission groups (
   - Username: sign-in identifier
   - Email: used for notifications and Ory Kratos recovery flows
   - Linked Employee: references `db_employee`
+- [x] **Department default group**: when an account is created, its employee's department default permission group (DBPG002) is added at the department's branch to the assignments picked here (see `docs/programs/DBPG002_BRANCHES_DEPARTMENTS.md`); the row is an ordinary assignment, editable or removable on this page.
 - [x] **Role & Scope Assignments (`su_user_assignment`)**:
   - Permission Groups: a user can hold multiple assignments
   - Organizational Scope per Assignment: Organization, Company, Branch, or Department

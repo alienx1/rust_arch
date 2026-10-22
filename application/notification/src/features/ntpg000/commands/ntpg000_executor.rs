@@ -27,6 +27,10 @@ impl Ntpg000Commands for Ntpg000CommandExecutor {
         self.ingest_action(message).await
     }
 
+    async fn push_live(&self, message: NotificationMessage) {
+        self.push_live_action(message).await
+    }
+
     async fn list(&self, username: &str, limit: Option<u64>) -> Result<NotificationListDto, Ntpg000Error> {
         self.list_action(username, limit).await
     }

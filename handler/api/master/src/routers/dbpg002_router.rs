@@ -126,6 +126,23 @@ pub async fn get_summary_handler(
     Ok(wire.respond(commands.get_summary().await?))
 }
 
+/// Active permission groups, for a department's default group. Naming the groups is for those who
+/// may assign them (SUPG004), so the list needs READ there as well as on this program.
+pub async fn list_permission_group_options_handler(
+    State(commands): State<Arc<dyn Dbpg002Commands>>,
+    State(access): State<Arc<dyn AccessControl>>,
+    Extension(user): Extension<AuthenticatedUser>,
+    wire: WireFormat,
+) -> Result<Response, Dbpg002ApiError> {
+    if let Err(denied) = require(&access, &user, PROGRAM, PermissionAction::Read).await {
+        return Ok(denied);
+    }
+    if let Err(denied) = require(&access, &user, "SUPG004", PermissionAction::Read).await {
+        return Ok(denied);
+    }
+    Ok(wire.respond(commands.list_permission_group_options().await?))
+}
+
 /// Branch types (HEAD / BRANCH)
 pub async fn list_branch_types_handler(
     State(commands): State<Arc<dyn Dbpg002Commands>>,
@@ -260,6 +277,13 @@ pub async fn create_department_handler(
         Ok(actor) => actor,
         Err(denied) => return Ok(denied),
     };
+    // A default permission group is given to the department's accounts: that is assigning a group
+    // to accounts, which needs the same right as on the user accounts page (SUPG004 WRITE)
+    if cmd.default_permission_group_id.is_some()
+        && let Err(denied) = require(&access, &user, "SUPG004", PermissionAction::Write).await
+    {
+        return Ok(denied);
+    }
     Ok(wire.respond(commands.create_department(cmd, Some(actor.user_id)).await?))
 }
 
@@ -279,6 +303,17 @@ pub async fn update_department_handler(
     // Moving to another branch needs the right there too
     if let Err(denied) = require_unit(&access, &user, PROGRAM, PermissionAction::Write, ScopeLevel::Branch, cmd.branch_id).await {
         return Ok(denied);
+    }
+    // Setting or changing the default permission group grants it to the department's accounts, so
+    // it needs the right to assign groups (SUPG004 WRITE); leaving it as it is, or clearing it,
+    // grants nothing and stays a DBPG002 matter
+    if let Some(new_default) = cmd.default_permission_group_id {
+        let current = commands.get_department_by_id(id).await?.and_then(|d| d.default_permission_group_id);
+        if current != Some(new_default)
+            && let Err(denied) = require(&access, &user, "SUPG004", PermissionAction::Write).await
+        {
+            return Ok(denied);
+        }
     }
     Ok(wire.respond(commands.update_department(id, cmd, Some(actor.user_id)).await?))
 }
@@ -304,6 +339,7 @@ pub fn dbpg002_routes() -> Router<AppConnection> {
         .route("/companies", get(list_company_options_handler))
         .route("/summary", get(get_summary_handler))
         .route("/branches/types", get(list_branch_types_handler))
+        .route("/options/permission-groups", get(list_permission_group_options_handler))
         .route("/branches", get(list_branches_handler).post(create_branch_handler))
         .route(
             "/branches/{id}",
@@ -326,6 +362,7 @@ pub fn dbpg002_routes_with_state(state: Dbpg002State) -> Router {
         .route("/companies", get(list_company_options_handler))
         .route("/summary", get(get_summary_handler))
         .route("/branches/types", get(list_branch_types_handler))
+        .route("/options/permission-groups", get(list_permission_group_options_handler))
         .route("/branches", get(list_branches_handler).post(create_branch_handler))
         .route(
             "/branches/{id}",

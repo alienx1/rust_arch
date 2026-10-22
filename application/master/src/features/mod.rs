@@ -18,7 +18,7 @@ pub use db::dbpg000::{
     Dbpg000Commands, Dbpg000Error, Dbpg000Queries, OrganizationDto, OrganizationSummaryDto,
 };
 pub use db::dbpg002::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand, PermissionGroupOptionDto,
     CreateDepartmentCommand, DbDbpg002Queries, Dbpg002CommandExecutor, Dbpg002Commands,
     Dbpg002Error, Dbpg002Queries, Dbpg002SummaryDto, DepartmentDto, DepartmentFilterQuery,
     UpdateBranchCommand, UpdateDepartmentCommand,

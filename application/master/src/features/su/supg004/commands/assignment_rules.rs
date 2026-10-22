@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use super::supg004_executor::Supg004CommandExecutor;
+use crate::features::su::department_default_group::default_assignment;
 use crate::features::su::supg004::errors::Supg004Error;
 use crate::features::su::supg004::models::AssignmentCommand;
 use domain::entity::sea_orm_active_enums::ScopeLevel;
@@ -85,6 +86,17 @@ impl Supg004CommandExecutor {
             }
         }
         Ok((assignments, groups))
+    }
+
+    /// What the employee's department gives its accounts: its default permission group at its
+    /// branch. `None` when the department has none, or the group is switched off now.
+    pub(super) async fn department_default(&self, department_id: Uuid) -> Result<Option<Assignment>, Supg004Error> {
+        let Some(department) = db_department::Entity::find_by_id(department_id).one(&self.db).await? else {
+            return Ok(None);
+        };
+        let Some(default) = default_assignment(&department) else { return Ok(None) };
+        let active = self.group(default.0).await.map(|g| g.active).unwrap_or(false);
+        Ok(active.then_some(default))
     }
 
     /// The existing assignment rows of an account as (row, (group, level, unit))

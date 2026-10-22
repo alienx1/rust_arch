@@ -24,7 +24,7 @@ pub use error_templates::{ErrorTemplateError, ErrorTemplateSource};
 pub use event::EventService;
 pub use event_consumer::{EventConsumer, EventHandler};
 pub use notification::{
-    NOTIFICATIONS_TOPIC, NOTIFICATION_SERVICE_GROUP, Notification, NotificationMessage, NotificationPush,
+    LIVE_NOTIFICATIONS_TOPIC, LIVE_NOTIFICATION_GROUP, NOTIFICATIONS_TOPIC, NOTIFICATION_SERVICE_GROUP, Notification, NotificationMessage, NotificationPush,
     NotificationService, PushEvent, notification_kind,
 };
 pub use report_job::{REPORT_REQUESTS_TOPIC, REPORT_WORKER_GROUP, ReportJobMessage, report_kind};

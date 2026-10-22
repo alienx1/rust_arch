@@ -35,7 +35,8 @@ async fn test_the_update_is_conditional_on_the_loaded_version_and_bumps_it() {
         sql.contains(r#"AND "db_branch"."row_version" = $4"#) && sql.contains("BigInt(Some(5))"),
         "guarded by the loaded version: {sql}"
     );
-    assert!(!sql.contains("99"), "a version set by the caller is ignored: {sql}");
+    // (a random UUID can contain the digits 99: look for the value, not the text)
+    assert!(!sql.contains("(Some(99))"), "a version set by the caller is ignored: {sql}");
 }
 
 #[tokio::test]

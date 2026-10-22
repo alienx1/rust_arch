@@ -11,4 +11,7 @@ pub struct CreateDepartmentCommand {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Permission group the accounts of the department's employees get at the branch (optional)
+    #[serde(default)]
+    pub default_permission_group_id: Option<Uuid>,
 }

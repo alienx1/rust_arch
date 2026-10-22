@@ -1,68 +1,28 @@
-//! External service connections for api-master (PostgreSQL/pgEdge, Valkey, Ory Kratos).
+//! External service connections for api-master (PostgreSQL/pgEdge, Valkey, Ory Kratos, Redpanda,
+//! Quickwit, S3) and the registry of feature services built on them (`wiring/`).
 
-use application_core::traits::{CacheService, SqlContext};
-use application_master::features::dashboard::{
-    DashboardCommandExecutor, DashboardCommands, DbDashboardQueries,
-};
-use application_master::features::su::supg005::{
-    DbSupg005Queries, Supg005CommandExecutor, Supg005Commands,
-};
+use application_core::traits::{CacheService, ContentService, ReadCaches, SqlContext, cache_ns};
 use application_master::features::localization::{
-    DbErrorTemplateSource, DbLabelQueries, ErrorTemplateSource, I18nCommandExecutor,
-    LocalizationCommands,
+    CachedLocalizationQueries, DbErrorTemplateSource, DbLabelQueries, ErrorTemplateSource, I18nCacheRefresher,
+    LocalizationQueries,
 };
-use application_master::features::db::dbpg000::{
-    DbDbpg000Queries, Dbpg000CommandExecutor, Dbpg000Commands, Dbpg000Queries,
-};
-use application_master::features::su::access_control::{AccessControl, DbAccessControl};
-use application_master::features::su::account_security::{
-    AccountSecurityCommands, AccountSecurityExecutor, DbAccountSecurityQueries,
-};
-use application_master::features::su::supg001::{
-    DbSupg001Queries, Supg001CommandExecutor, Supg001Commands, Supg001Queries,
-};
-use application_core::traits::{IdentityProvisioningPort, ReadCaches, cache_ns};
-use application_master::features::localization::{CachedLocalizationQueries, I18nCacheRefresher};
-use infrastructure::middleware::CacheInvalidation;
-use application_master::features::al::alpg000::{Alpg000CommandExecutor, Alpg000Commands};
-use application_master::features::al::alpg001::{Alpg001CommandExecutor, Alpg001Commands, DbAlpg001Queries};
-use application_master::features::su::supg004::{
-    DbSupg004Queries, Supg004CommandExecutor, Supg004Commands, Supg004Queries,
-};
-use application_master::features::su::supg006::{DbSupg006Queries, Supg006CommandExecutor, Supg006Commands};
-use application_master::features::su::supg003::{
-    DbSupg003Queries, Supg003CommandExecutor, Supg003Commands, Supg003Queries,
-};
-use application_master::features::su::supg002::{
-    DbSupg002Queries, Supg002CommandExecutor, Supg002Commands,
-};
-use application_master::features::db::dbpg005::{
-    DbDbpg005Queries, Dbpg005CommandExecutor, Dbpg005Commands, Dbpg005Queries,
-};
-use application_master::features::db::dbpg006::{
-    DbDbpg006Queries, Dbpg006CommandExecutor, Dbpg006Commands, Dbpg006Queries,
-};
-use application_master::features::db::dbpg004::{
-    DbDbpg004Queries, Dbpg004CommandExecutor, Dbpg004Commands, Dbpg004Queries,
-};
-use application_master::features::db::dbpg003::{
-    DbDbpg003Queries, Dbpg003CommandExecutor, Dbpg003Commands, Dbpg003Queries,
-};
-use application_master::features::db::dbpg002::{
-    DbDbpg002Queries, Dbpg002CommandExecutor, Dbpg002Commands, Dbpg002Queries,
-};
-use application_master::features::db::dbpg001::{
-    DbDbpg001Queries, Dbpg001CommandExecutor, Dbpg001Commands,
-};
-use infrastructure::middleware::KratosConfig;
-use infrastructure::services::{PgEdgeSqlContext, ValkeyCacheService};
+use application_master::features::su::account_security::AccountSecurityCommands;
+use infrastructure::middleware::{CacheInvalidation, KratosConfig};
+use infrastructure::services::{PgEdgeSqlContext, RedpandaEventService, ValkeyCacheService};
 use sea_orm::{ConnectOptions, DatabaseConnection, DbErr};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 
+use crate::services::Services;
+use crate::wiring::{WiringContext, register_all};
+
 /// Unified connection state for `api-master`.
+///
+/// The infrastructure the middlewares use is a field; every feature's command interface is in
+/// [`services`](Self::services), looked up by type, so a route handler just asks for
+/// `State<Arc<dyn FeatureCommands>>` (see the `FromRef` impl below and `wiring/`).
 #[derive(Clone)]
 pub struct AppConnection {
     /// pgEdge / PostgreSQL Database Context
@@ -73,48 +33,14 @@ pub struct AppConnection {
     pub cache_invalidation: Option<CacheInvalidation>,
     /// Ory Kratos configuration for auth verification (optional)
     pub kratos: Option<KratosConfig>,
-    /// Localization commands interface
-    pub localization_commands: Arc<dyn LocalizationCommands>,
     /// Error message templates (`error.<CODE>` labels) for the error-localization middleware
     pub error_templates: Arc<dyn ErrorTemplateSource>,
     /// Audit log (Quickwit): pages / clicks / API calls of users; a no-op until configured
     pub audit_log: Arc<dyn application_core::traits::AuditLogPort>,
-    /// Dashboard commands interface
-    pub dashboard_commands: Arc<dyn DashboardCommands>,
-    /// IAM commands interface
-    pub supg005_commands: Arc<dyn Supg005Commands>,
-    /// Password mails, forced password change and the sign-in lock
-    pub account_security_commands: Arc<dyn AccountSecurityCommands>,
-    /// DBPG000 (organizations & companies list) commands interface
-    pub dbpg000_commands: Arc<dyn Dbpg000Commands>,
-    /// DBPG001 (organization & company create/update) commands interface
-    pub dbpg001_commands: Arc<dyn Dbpg001Commands>,
-    /// DBPG002 (branches & departments) commands interface
-    pub dbpg002_commands: Arc<dyn Dbpg002Commands>,
-    /// DBPG003 (employees) commands interface
-    pub dbpg003_commands: Arc<dyn Dbpg003Commands>,
-    /// Contacts of organizations, companies, branches and employees
-    pub contact_commands: Arc<dyn application_master::features::db::contacts::ContactCommands>,
-    /// DBPG004 (reference data) commands interface
-    pub dbpg004_commands: Arc<dyn Dbpg004Commands>,
-    /// DBPG005 (geography) commands interface
-    pub dbpg005_commands: Arc<dyn Dbpg005Commands>,
-    /// DBPG006 (i18n labels) commands interface
-    pub dbpg006_commands: Arc<dyn Dbpg006Commands>,
-    /// SUPG001 (systems & modules) commands interface
-    pub supg001_commands: Arc<dyn Supg001Commands>,
-    /// SUPG002 (menu tree) commands interface
-    pub supg002_commands: Arc<dyn Supg002Commands>,
-    /// SUPG003 (permission matrix) commands interface
-    pub supg003_commands: Arc<dyn Supg003Commands>,
-    pub supg006_commands: Arc<dyn Supg006Commands>,
-    /// SUPG004 (user accounts) commands interface
-    pub supg004_commands: Arc<dyn Supg004Commands>,
-    /// ALPG000 (audit log) commands interface
-    pub alpg000_commands: Arc<dyn Alpg000Commands>,
-    pub alpg001_commands: Arc<dyn Alpg001Commands>,
-    /// Permission checks for the security-administration endpoints
-    pub access_control: Arc<dyn AccessControl>,
+    /// Tells a user how their write went (Redpanda -> api-notification); `None` without a broker client
+    pub notifier: Option<Arc<dyn application_core::traits::NotificationService>>,
+    /// Every feature's command interface (and the permission checks), by type
+    pub services: Services,
 }
 
 impl AppConnection {
@@ -186,164 +112,20 @@ impl AppConnection {
             Some(cfg)
         };
 
-        // Localization Commands
         // Dictionaries (and the API error templates built from them) are read through Valkey
-        let loc_queries: Arc<dyn application_master::features::localization::LocalizationQueries> =
-            Arc::new(CachedLocalizationQueries::new(
-                Arc::new(DbLabelQueries::new(db.connection().clone())),
-                caches.ns(cache_ns::I18N),
-            ));
-        let error_templates: Arc<dyn ErrorTemplateSource> =
-            Arc::new(DbErrorTemplateSource::new(loc_queries.clone()));
-        let i18n_refresher = Arc::new(I18nCacheRefresher::new(loc_queries.clone()));
-        let localization_commands: Arc<dyn LocalizationCommands> =
-            Arc::new(I18nCommandExecutor::new(loc_queries));
-
-        // Dashboard Commands
-        let dash_queries = Arc::new(DbDashboardQueries::new(db.connection().clone()));
-        let dashboard_commands: Arc<dyn DashboardCommands> =
-            Arc::new(DashboardCommandExecutor::new(dash_queries).with_cache(caches.clone()));
-
-        // SUPG005 Commands
-        let supg005_queries = Arc::new(DbSupg005Queries::new(db.connection().clone()));
-        let mut supg005_executor = Supg005CommandExecutor::new(supg005_queries);
-        if let Some(ref k) = kratos {
-            supg005_executor = supg005_executor.with_revocation(Some(Arc::new(k.clone())));
-        }
-        let supg005_commands: Arc<dyn Supg005Commands> = Arc::new(supg005_executor);
-
-        // DBPG000 / DBPG001 Commands (shared Sea-ORM read runner)
-        let dbpg000_queries: Arc<dyn Dbpg000Queries> =
-            Arc::new(DbDbpg000Queries::new(db.connection().clone()));
-        let dbpg000_commands: Arc<dyn Dbpg000Commands> =
-            Arc::new(Dbpg000CommandExecutor::new(dbpg000_queries.clone()).with_cache(caches.clone()));
-        // Logos and photos live in Garage / S3 (`AWS_*`, `S3_BUCKET_NAME`); the client only connects on use
-        let image_content: Arc<dyn application_core::traits::ContentService> =
-            Arc::new(infrastructure::S3ContentService::new(infrastructure::s3_client_from_env().await));
-        let image_bucket = std::env::var("S3_BUCKET_NAME").unwrap_or_else(|_| "rust-arch-bucket".to_string());
-        let contact_commands: Arc<dyn application_master::features::db::contacts::ContactCommands> =
-            {
-                let mut executor = application_master::features::db::contacts::ContactCommandExecutor::new(db.connection().clone());
-                if let Some(k) = &kratos {
-                    executor = executor.with_identity(Arc::new(k.clone()));
-                }
-                Arc::new(executor)
-            };
-        let dbpg001_queries = Arc::new(DbDbpg001Queries::new(dbpg000_queries));
-        let dbpg001_commands: Arc<dyn Dbpg001Commands> =
-            Arc::new(
-                Dbpg001CommandExecutor::new(dbpg001_queries, db.connection().clone())
-                    .with_cache(caches.clone())
-                    .with_images(image_content.clone(), image_bucket.clone()),
-            );
-
-        // DBPG002 Commands
-        let dbpg002_queries: Arc<dyn Dbpg002Queries> =
-            Arc::new(DbDbpg002Queries::new(db.connection().clone()));
-        let dbpg002_commands: Arc<dyn Dbpg002Commands> =
-            Arc::new(Dbpg002CommandExecutor::new(dbpg002_queries, db.connection().clone()).with_cache(caches.clone()));
-
-        // DBPG003 Commands
-        let dbpg003_queries: Arc<dyn Dbpg003Queries> =
-            Arc::new(DbDbpg003Queries::new(db.connection().clone()));
-        let dbpg003_commands: Arc<dyn Dbpg003Commands> =
-            Arc::new(
-                Dbpg003CommandExecutor::new(dbpg003_queries, db.connection().clone())
-                    .with_cache(caches.clone())
-                    .with_account_suspension(supg005_commands.clone())
-                    .with_images(image_content.clone(), image_bucket.clone()),
-            );
-
-        // DBPG004 Commands
-        let dbpg004_queries: Arc<dyn Dbpg004Queries> =
-            Arc::new(DbDbpg004Queries::new(db.connection().clone()));
-        let dbpg004_commands: Arc<dyn Dbpg004Commands> =
-            Arc::new(Dbpg004CommandExecutor::new(dbpg004_queries, db.connection().clone()).with_cache(caches.clone()));
-
-        // DBPG005 Commands
-        let dbpg005_queries: Arc<dyn Dbpg005Queries> =
-            Arc::new(DbDbpg005Queries::new(db.connection().clone()));
-        let dbpg005_commands: Arc<dyn Dbpg005Commands> =
-            Arc::new(Dbpg005CommandExecutor::new(dbpg005_queries, db.connection().clone()).with_cache(caches.clone()));
-
-        // DBPG006 Commands
-        let dbpg006_queries: Arc<dyn Dbpg006Queries> =
-            Arc::new(DbDbpg006Queries::new(db.connection().clone()));
-        let dbpg006_commands: Arc<dyn Dbpg006Commands> =
-            Arc::new(Dbpg006CommandExecutor::new(dbpg006_queries, db.connection().clone()).with_cache(caches.clone()));
-
-        // SUPG001 Commands
-        let supg001_queries: Arc<dyn Supg001Queries> =
-            Arc::new(DbSupg001Queries::new(db.connection().clone()));
-        let supg001_commands: Arc<dyn Supg001Commands> =
-            Arc::new(Supg001CommandExecutor::new(supg001_queries, db.connection().clone()));
-
-        // SUPG002 Commands
-        let supg002_queries = Arc::new(DbSupg002Queries::new(db.connection().clone()));
-        let supg002_commands: Arc<dyn Supg002Commands> =
-            Arc::new(Supg002CommandExecutor::new(supg002_queries, db.connection().clone()).with_cache(caches.clone()));
-
-        // SUPG003 Commands
-        let supg003_queries: Arc<dyn Supg003Queries> =
-            Arc::new(DbSupg003Queries::new(db.connection().clone()));
-        let supg003_commands: Arc<dyn Supg003Commands> =
-            Arc::new(Supg003CommandExecutor::new(supg003_queries, db.connection().clone()));
-        let supg006_commands: Arc<dyn Supg006Commands> = Arc::new(Supg006CommandExecutor::new(
-            Arc::new(DbSupg006Queries::new(db.connection().clone())),
-            db.connection().clone(),
+        let loc_queries: Arc<dyn LocalizationQueries> = Arc::new(CachedLocalizationQueries::new(
+            Arc::new(DbLabelQueries::new(db.connection().clone())),
+            caches.ns(cache_ns::I18N),
         ));
+        let error_templates: Arc<dyn ErrorTemplateSource> = Arc::new(DbErrorTemplateSource::new(loc_queries.clone()));
+        let i18n_refresher = Arc::new(I18nCacheRefresher::new(loc_queries.clone()));
 
-        // SUPG004 Commands: accounts are created at the identity provider (Kratos) too
-        let supg004_queries: Arc<dyn Supg004Queries> =
-            Arc::new(DbSupg004Queries::new(db.connection().clone()));
-        let identity: Option<Arc<dyn IdentityProvisioningPort>> = kratos
-            .clone()
-            .map(|k| Arc::new(k) as Arc<dyn IdentityProvisioningPort>);
-        // Password mails, the forced password change and the sign-in lock (counters in Valkey, or in
-        // this process when Valkey is down)
-        let lock_store: Arc<dyn CacheService> = match &cache {
-            Some(c) => Arc::new(c.clone()),
-            None => Arc::new(application_core::traits::InMemoryCache::new()),
-        };
-        // Mail goes to the notification service through Redpanda (it sends it and retries); without a
-        // broker client this process sends it itself
-        let mail_service: Arc<dyn application_core::traits::MailService> =
-            match infrastructure::services::RedpandaEventService::new(
-                &env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string()),
-            ) {
-                Ok(events) => Arc::new(infrastructure::QueuedMailService::new(Arc::new(events))),
-                Err(e) => {
-                    warn!("Mail queue (Redpanda) not available, sending mail directly: {e}");
-                    Arc::new(infrastructure::ConfiguredMailService::new(db.connection().clone()))
-                }
-            };
-        let account_security: Arc<dyn AccountSecurityCommands> = {
-            let mut executor = AccountSecurityExecutor::new(
-                Arc::new(DbAccountSecurityQueries::new(db.connection().clone())),
-                lock_store,
-            )
-            .with_cache(caches.clone())
-            .with_mail(mail_service);
-            if let Some(k) = &kratos {
-                executor = executor
-                    .with_identity(Arc::new(k.clone()))
-                    .with_session_revocation(Arc::new(k.clone()));
-            }
-            Arc::new(executor)
-        };
-        let supg004_commands: Arc<dyn Supg004Commands> = Arc::new(
-            Supg004CommandExecutor::new(
-                supg004_queries,
-                db.connection().clone(),
-                identity,
-                supg005_commands.clone(),
-            )
-            .with_cache(caches.clone())
-            .with_account_security(account_security.clone()),
-        );
+        // Logos and photos live in Garage / S3 (`AWS_*`, `S3_BUCKET_NAME`); the client only connects on use
+        let image_content: Arc<dyn ContentService> =
+            Arc::new(infrastructure::S3ContentService::new(infrastructure::s3_client_from_env().await));
+        let image_bucket = env::var("S3_BUCKET_NAME").unwrap_or_else(|_| "rust-arch-bucket".to_string());
 
-        // ALPG000 Commands: audit log search + client event intake over the audit store
-        // Quickwit unless AUDIT_LOG_ENABLED=false; constructing never fails (Quickwit may be down)
+        // Audit log: Quickwit unless AUDIT_LOG_ENABLED=false; constructing never fails (Quickwit may be down)
         let audit_config = infrastructure::QuickwitConfig::from_env();
         let audit_log: Arc<dyn application_core::traits::AuditLogPort> = if audit_config.enabled {
             infrastructure::QuickwitAuditLog::start(audit_config)
@@ -352,60 +134,43 @@ impl AppConnection {
         };
         // Row changes captured by the database trigger go to the same audit log
         infrastructure::spawn_data_change_shipper(db.connection().clone(), audit_log.clone());
-        // Report requests (CSV export of the audit log) go to the report worker through Redpanda;
-        // creating the producer does not connect, so a broker that is down only fails the request
-        let kafka_brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
-        let mut alpg000_executor = Alpg000CommandExecutor::new(audit_log.clone()).with_cache(caches.clone()).with_programs(Arc::new(
-            application_master::features::al::alpg000::DbAlpg000Queries::new(db.connection().clone()),
-        ));
-        // The process monitor (ALPG001) reads the same job rows and re-publishes their requests
-        let mut alpg001_executor = Alpg001CommandExecutor::new(Arc::new(DbAlpg001Queries::new(db.connection().clone())));
-        match infrastructure::services::RedpandaEventService::new(&kafka_brokers) {
-            Ok(events) => {
-                let events = Arc::new(events);
-                alpg000_executor = alpg000_executor.with_events(events.clone());
-                alpg001_executor = alpg001_executor.with_events(events);
-            }
-            Err(e) => warn!("Report queue (Redpanda) not available: {e}"),
-        }
-        let alpg000_commands: Arc<dyn Alpg000Commands> = Arc::new(alpg000_executor);
-        let alpg001_commands: Arc<dyn Alpg001Commands> = Arc::new(alpg001_executor);
 
-        let access_control: Arc<dyn AccessControl> = Arc::new(DbAccessControl::new(db.connection().clone()).with_cache(caches.clone()));
+        // Redpanda: report requests, mail and the notices that tell users how their writes went.
+        // Creating the client does not connect, so a broker that is down only fails the request.
+        let broker = RedpandaEventService::new(&env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string()))
+            .map_err(|e| warn!("Redpanda client not available: {e}"))
+            .ok()
+            .map(Arc::new);
+        let notifier: Option<Arc<dyn application_core::traits::NotificationService>> = broker.clone().map(|events| {
+            Arc::new(infrastructure::services::RedpandaNotificationPublisher::new(events))
+                as Arc<dyn application_core::traits::NotificationService>
+        });
+
+        // The features (wiring/<feature>.rs), built from the infrastructure above
+        let services = register_all(&WiringContext {
+            db: db.connection().clone(),
+            cache: cache.clone(),
+            caches: caches.clone(),
+            kratos: kratos.clone(),
+            audit_log: audit_log.clone(),
+            broker,
+            image_content,
+            image_bucket,
+            loc_queries,
+        });
 
         // Writes clear (and where possible refill) the cached reads built from the data they edit
         let cache_invalidation = caches.service().map(|service| {
             CacheInvalidation::new(service, crate::cache_policy::invalidation_rules()).with_refresher(i18n_refresher)
         });
 
-        Ok(Self {
-            db,
-            cache,
-            cache_invalidation,
-            kratos,
-            localization_commands,
-            error_templates,
-            audit_log,
-            dashboard_commands,
-            supg005_commands,
-            account_security_commands: account_security,
-            dbpg000_commands,
-            dbpg001_commands,
-            dbpg002_commands,
-            dbpg003_commands,
-            contact_commands,
-            dbpg004_commands,
-            dbpg005_commands,
-            dbpg006_commands,
-            supg001_commands,
-            supg002_commands,
-            supg003_commands,
-            supg006_commands,
-            supg004_commands,
-            alpg000_commands,
-            alpg001_commands,
-            access_control,
-        })
+        Ok(Self { db, cache, cache_invalidation, kratos, error_templates, audit_log, notifier, services })
+    }
+
+    /// A registered service; asking for one that was never wired is a start-up mistake (panics
+    /// with the type's name)
+    pub fn service<T: ?Sized + Send + Sync + 'static>(&self) -> Arc<T> {
+        self.services.require::<T>()
     }
 
     /// Access the underlying Sea-ORM `DatabaseConnection`.
@@ -429,117 +194,11 @@ impl AppConnection {
     }
 }
 
-impl axum::extract::FromRef<AppConnection> for Arc<dyn LocalizationCommands> {
+/// Every route handler's `State<Arc<dyn FeatureCommands>>` is resolved here, by type, from the
+/// registry the `wiring/` files filled: one impl for all features (no per-feature `FromRef`).
+impl<T: ?Sized + Send + Sync + 'static> axum::extract::FromRef<AppConnection> for Arc<T> {
     fn from_ref(conn: &AppConnection) -> Self {
-        conn.localization_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn DashboardCommands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dashboard_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg005Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg005_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg000Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg000_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg001Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg001_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg002Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg002_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg003Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg003_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg002Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg002_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg004Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg004_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg005Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg005_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Dbpg006Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.dbpg006_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn AccessControl> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.access_control.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg001Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg001_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg006Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg006_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg003Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg003_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Supg004Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.supg004_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Alpg001Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.alpg001_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn Alpg000Commands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.alpg000_commands.clone()
-    }
-}
-
-impl axum::extract::FromRef<AppConnection> for Arc<dyn AccountSecurityCommands> {
-    fn from_ref(conn: &AppConnection) -> Self {
-        conn.account_security_commands.clone()
+        conn.services.require::<T>()
     }
 }
 
@@ -547,6 +206,6 @@ impl axum::extract::FromRef<AppConnection> for Arc<dyn AccountSecurityCommands> 
 /// guards logins by the account flag)
 impl axum::extract::FromRef<AppConnection> for Option<Arc<dyn AccountSecurityCommands>> {
     fn from_ref(conn: &AppConnection) -> Self {
-        Some(conn.account_security_commands.clone())
+        conn.services.get::<dyn AccountSecurityCommands>()
     }
 }

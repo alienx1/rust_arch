@@ -11,5 +11,8 @@ pub struct UpdateDepartmentCommand {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Permission group the accounts of the department's employees get at the branch (`None` = none)
+    #[serde(default)]
+    pub default_permission_group_id: Option<Uuid>,
     pub row_version: i64,
 }

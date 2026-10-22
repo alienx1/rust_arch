@@ -10,7 +10,7 @@ use web_package::core::i18n::t_or;
 
 use crate::pages::db::dbpg002::models::{
     BranchDto, BranchTypeOptionDto, CompanyOptionDto, CreateBranchInput, CreateDepartmentInput,
-    DepartmentDto, UpdateBranchInput, UpdateDepartmentInput,
+    DepartmentDto, PermissionGroupOptionDto, UpdateBranchInput, UpdateDepartmentInput,
 };
 use crate::contacts::{load_contacts, save_contacts};
 use crate::pages::db::dbpg002::services::{DBPG002_API, Dbpg002Service};
@@ -41,6 +41,8 @@ pub struct Dbpg002BranchFormContext {
 pub struct Dbpg002DepartmentFormContext {
     pub editing: ReadSignal<Option<DepartmentDto>>,
     pub branches: ReadSignal<Vec<BranchDto>>,
+    /// Permission groups the department's default can be picked from
+    pub permission_groups: ReadSignal<Vec<PermissionGroupOptionDto>>,
     /// Branch to pre-select when creating (`?branch_id=`)
     pub default_branch_id: ReadSignal<Option<String>>,
     pub is_loading: ReadSignal<bool>,
@@ -196,6 +198,7 @@ pub fn provide_dbpg002_department_form_context(
     let service = Dbpg002Service::new();
     let (editing, set_editing) = signal(Option::<DepartmentDto>::None);
     let (branches, set_branches) = signal(Vec::<BranchDto>::new());
+    let (permission_groups, set_permission_groups) = signal(Vec::<PermissionGroupOptionDto>::new());
     let (default_branch_id, _) = signal(default_branch_id);
     let (is_loading, set_is_loading) = signal(true);
     let (is_saving, set_is_saving) = signal(false);
@@ -214,6 +217,10 @@ pub fn provide_dbpg002_department_form_context(
             match s.fetch_branches(company_filter, None, Some(true)).await {
                 Ok(v) => set_branches.set(v),
                 Err(e) => err = Some(e),
+            }
+            // Without READ on the groups the selector just stays empty
+            if let Ok(v) = s.fetch_permission_group_options().await {
+                set_permission_groups.set(v);
             }
             if let Some(id) = id {
                 match s.fetch_department(&id).await {
@@ -265,6 +272,7 @@ pub fn provide_dbpg002_department_form_context(
                             active: input.active,
                             name_th: input.name_th,
                             name_en: input.name_en,
+                            default_permission_group_id: input.default_permission_group_id,
                             row_version: dept.row_version,
                         },
                     )
@@ -290,6 +298,7 @@ pub fn provide_dbpg002_department_form_context(
     let ctx = Dbpg002DepartmentFormContext {
         editing,
         branches,
+        permission_groups,
         default_branch_id,
         is_loading,
         is_saving,

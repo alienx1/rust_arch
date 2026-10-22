@@ -113,7 +113,7 @@ fn protected(routes: Router<AppConnection>, conn: &AppConnection) -> Router<AppC
         // for the signed-in account
         Some(kratos) => routes
             .route_layer(axum::middleware::from_fn_with_state(
-                conn.access_control.clone(),
+                conn.service::<dyn application_master::features::su::access_control::AccessControl>(),
                 crate::view_scope_layer::apply_view_scope,
             ))
             .route_layer(axum::middleware::from_fn_with_state(kratos.clone(), require_kratos_session)),
@@ -204,6 +204,12 @@ pub fn build_app_router(conn: AppConnection, prefix: &str) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             infrastructure::middleware::AuditTrailState::new(conn.audit_log.clone(), conn.kratos.clone()),
             audit_trail,
+        ))
+        // Tell the user how their create / update / delete went: a notification through the same
+        // SSE stream as the bell. Just outside the audit trail, which keeps the user on the response.
+        .layer(axum::middleware::from_fn_with_state(
+            infrastructure::middleware::ChangeNoticeState::new(conn.notifier.clone()),
+            infrastructure::middleware::change_notice,
         ))
         .layer(cors_layer_from_env())
         .layer(TraceLayer::new_for_http())

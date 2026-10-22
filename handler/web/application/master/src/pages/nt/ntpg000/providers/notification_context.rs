@@ -23,6 +23,9 @@ pub struct Notifications {
     pub unread: ReadSignal<u64>,
     /// Counts every reload caused by a push: pages watch it to refresh themselves
     pub changes: ReadSignal<u64>,
+    /// The notification that just arrived over the stream, shown as a toast (cleared by the toast)
+    pub toast: ReadSignal<Option<NotificationDto>>,
+    pub dismiss_toast: Callback<()>,
     /// The user wants a chime for a new notification (kept in the browser)
     pub sound_on: ReadSignal<bool>,
     pub toggle_sound: Callback<()>,
@@ -39,6 +42,7 @@ pub fn provide_notifications() -> Notifications {
     let (unread, set_unread) = signal(0u64);
     let (changes, set_changes) = signal(0u64);
     let (sound_on, set_sound_on) = signal(sound_enabled());
+    let (toast, set_toast) = signal(Option::<NotificationDto>::None);
     let stream = StoredValue::new_local(Option::<NotificationStream>::None);
     unlock_audio_on_first_gesture();
 
@@ -68,11 +72,16 @@ pub fn provide_notifications() -> Notifications {
                         set_changes.update(|c| *c += 1);
                         on_push();
                     },
-                    move || {
+                    move |pushed: Option<NotificationDto>| {
                         if sound_on.get_untracked() {
                             play_chime();
                         }
+                        if let Some(n) = pushed {
+                            set_toast.set(Some(n));
+                        }
                     },
+                    // How a save went: shown, never stored, so no reload and no chime
+                    move |n: NotificationDto| set_toast.set(Some(n)),
                 ));
             }
         });
@@ -85,6 +94,8 @@ pub fn provide_notifications() -> Notifications {
         items,
         unread,
         changes,
+        toast,
+        dismiss_toast: Callback::new(move |()| set_toast.set(None)),
         sound_on,
         toggle_sound: Callback::new(move |()| {
             let on = !sound_on.get_untracked();

@@ -13,6 +13,7 @@ pub struct Model {
     pub branch_id: Uuid,
     pub code: String,
     pub active: bool,
+    pub default_permission_group_id: Option<Uuid>,
     pub change_by: Option<Uuid>,
     pub row_version: i64,
 }

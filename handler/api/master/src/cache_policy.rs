@@ -14,7 +14,8 @@ pub fn invalidation_rules() -> Vec<InvalidationRule> {
         // off suspends the accounts linked to it, so permissions and menus change as well.
         InvalidationRule { path: "/db/dbpg000", namespaces: &[ORG, DASHBOARD] },
         InvalidationRule { path: "/db/dbpg001", namespaces: &[ORG, DASHBOARD] },
-        InvalidationRule { path: "/db/dbpg002", namespaces: &[ORG, DASHBOARD] },
+        // A department's default permission group is added to its accounts: permissions and menus change
+        InvalidationRule { path: "/db/dbpg002", namespaces: &[ORG, DASHBOARD, ACL, MENU] },
         InvalidationRule { path: "/db/dbpg003", namespaces: &[ORG, DASHBOARD, ACL, MENU] },
         // Reference data (lookups, geography, types, prefixes)
         InvalidationRule { path: "/db/dbpg004", namespaces: &[REF, ORG, DASHBOARD] },

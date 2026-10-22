@@ -284,6 +284,7 @@ CREATE TABLE "db_department" (
   "branch_id" uuid NOT NULL,
   "code" varchar(100) NOT NULL,
   "active" boolean NOT NULL DEFAULT false,
+  "default_permission_group_id" uuid,
   "change_by" uuid,
   "row_version" bigint NOT NULL DEFAULT 1
 );
@@ -771,6 +772,7 @@ COMMENT ON COLUMN "db_department"."id" IS 'Primary key of department';
 COMMENT ON COLUMN "db_department"."organization_id" IS 'Owning organization';
 
 COMMENT ON COLUMN "db_department"."company_id" IS 'Owning company';
+COMMENT ON COLUMN "db_department"."default_permission_group_id" IS 'Permission group every account of the department''s employees gets, at the department''s branch (added automatically)';
 
 COMMENT ON COLUMN "db_department"."branch_id" IS 'Owning branch';
 
@@ -1006,6 +1008,8 @@ ALTER TABLE "db_department" ADD FOREIGN KEY ("organization_id") REFERENCES "db_o
 ALTER TABLE "db_department" ADD FOREIGN KEY ("company_id") REFERENCES "db_company" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "db_department" ADD FOREIGN KEY ("branch_id") REFERENCES "db_branch" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "db_department" ADD FOREIGN KEY ("default_permission_group_id") REFERENCES "su_permission_group" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "db_department_label" ADD FOREIGN KEY ("department_id") REFERENCES "db_department" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 

@@ -14,7 +14,16 @@ pub struct NotificationDto {
     pub link: Option<String>,
     /// RFC 3339, UTC
     pub created_at: String,
+    /// Absent on a notification just pushed over the stream (it is unread by definition)
+    #[serde(default)]
     pub read: bool,
+}
+
+impl NotificationDto {
+    /// Whether the notification reports something that went wrong (shown as an error toast)
+    pub fn is_failure(&self) -> bool {
+        matches!(self.kind.as_str(), "data_failed" | "report_failed" | "mail_failed")
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

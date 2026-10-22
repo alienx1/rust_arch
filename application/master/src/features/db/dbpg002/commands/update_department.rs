@@ -1,11 +1,14 @@
 //! DBPG002 write: update a department (optionally moving it to another branch) with optimistic lock
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::features::optimistic_update::update_versioned;
 
+use super::default_group_rules::check_default_group;
 use super::department_label_writer::upsert_department_label;
+use crate::features::su::department_default_group::add_to_existing_accounts;
 use super::name_rules::required;
 use crate::features::db::dbpg002::commands::dbpg002_executor::Dbpg002CommandExecutor;
 use crate::features::db::dbpg002::errors::Dbpg002Error;
@@ -51,6 +54,9 @@ impl Dbpg002CommandExecutor {
             }
         }
 
+        check_default_group(&self.db, cmd.default_permission_group_id).await?;
+        let default_changed = existing.default_permission_group_id != cmd.default_permission_group_id;
+
         let next_version = existing.row_version + 1;
         let txn = self.db.begin().await?;
         let mut am: db_department::ActiveModel = existing.into();
@@ -59,6 +65,7 @@ impl Dbpg002CommandExecutor {
         am.branch_id = Set(branch.id);
         am.code = Set(code);
         am.active = Set(cmd.active);
+        am.default_permission_group_id = Set(cmd.default_permission_group_id);
         am.change_by = Set(actor_id);
         update_versioned(&txn, am, (db_department::Column::Id, db_department::Column::RowVersion), id, cmd.row_version).await?;
 
@@ -78,6 +85,13 @@ impl Dbpg002CommandExecutor {
                 next_version,
             )
             .await?;
+        }
+        // A new or changed default reaches the accounts that exist now (they keep what they have)
+        if default_changed && cmd.default_permission_group_id.is_some() {
+            if let Some(saved) = db_department::Entity::find_by_id(id).one(&txn).await? {
+                let added = add_to_existing_accounts(&txn, &saved, actor_id).await?;
+                info!("Department {id}: default permission group given to {added} existing account(s)");
+            }
         }
         txn.commit().await?;
 

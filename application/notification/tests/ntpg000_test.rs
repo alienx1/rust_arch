@@ -231,3 +231,76 @@ async fn test_a_user_keeps_at_most_300_notifications_oldest_go_first() {
     assert!(mine.iter().any(|n| n.id == ids[304]), "the newest is kept");
     assert_eq!(rows.iter().filter(|n| n.recipient == "somsri").count(), 1, "another user is untouched");
 }
+
+#[tokio::test]
+async fn test_a_fresh_notification_stored_by_another_instance_still_reaches_this_instances_streams() {
+    // Two instances read every message (each has its own consumer group); whichever stores it first
+    // must not leave the other's open streams without it. The row is stored once.
+    let r = rig();
+    let id = Uuid::now_v7();
+    let now = chrono::Utc::now().to_rfc3339();
+    r.rows.insert_if_absent(row_of(&message("somchai", id, &now))).await.unwrap(); // the other instance
+    r.exec.ingest(message("somchai", id, &now)).await;
+    assert_eq!(r.push.sent.lock().unwrap().len(), 1, "pushed to this instance's streams");
+    assert_eq!(r.rows.list("somchai", 10).await.unwrap().len(), 1, "stored once");
+
+    // An old duplicate (a replay after a restart) does not ring again
+    let old = Uuid::now_v7();
+    let long_ago = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    r.rows.insert_if_absent(row_of(&message("somchai", old, &long_ago))).await.unwrap();
+    r.exec.ingest(message("somchai", old, &long_ago)).await;
+    assert_eq!(r.push.sent.lock().unwrap().len(), 1, "nothing more for the replayed one");
+}
+
+fn row_of(m: &NotificationMessage) -> application_notification::features::ntpg000::NotificationModel {
+    use chrono::DateTime;
+    application_notification::features::ntpg000::NotificationModel {
+        id: Uuid::parse_str(&m.notification.id).unwrap(),
+        recipient: m.recipient.clone(),
+        kind: m.notification.kind.clone(),
+        title: m.notification.title.clone(),
+        body: m.notification.body.clone(),
+        data: m.notification.data.clone(),
+        link: m.notification.link.clone(),
+        created_at: DateTime::parse_from_rfc3339(&m.notification.created_at).unwrap(),
+        read_at: None,
+        row_version: 1,
+    }
+}
+
+#[tokio::test]
+async fn test_a_live_notice_is_pushed_and_nothing_is_stored() {
+    let r = rig();
+    let id = Uuid::now_v7();
+    r.exec.push_live(message("somchai", id, "2026-10-12T01:00:00Z")).await;
+    r.exec.push_live(message("somchai", id, "2026-10-12T01:00:00Z")).await; // nothing to dedupe: it is not kept
+    let sent = r.push.sent.lock().unwrap().clone();
+    assert_eq!(sent.len(), 2);
+    assert!(matches!(&sent[0], (who, PushEvent::Live(n)) if who == "somchai" && n.id == id.to_string()), "{sent:?}");
+    let list = r.exec.list("somchai", Some(10)).await.unwrap();
+    assert_eq!((list.items.len(), list.unread), (0, 0), "no row, no unread count");
+}
+
+#[tokio::test]
+async fn test_a_live_notice_without_a_recipient_is_dropped_and_a_foreign_link_removed() {
+    let r = rig();
+    r.exec.push_live(message("  ", Uuid::now_v7(), "2026-10-12T01:00:00Z")).await;
+    assert!(r.push.sent.lock().unwrap().is_empty());
+
+    let mut m = message("somchai", Uuid::now_v7(), "2026-10-12T01:00:00Z");
+    m.notification.link = Some("https://evil.example/x".into());
+    r.exec.push_live(m).await;
+    let sent = r.push.sent.lock().unwrap().clone();
+    assert!(matches!(&sent[0].1, PushEvent::Live(n) if n.link.is_none()), "{sent:?}");
+}
+
+#[tokio::test]
+async fn test_the_live_handler_pushes_readable_messages_and_skips_garbage() {
+    use application_core::traits::EventHandler;
+    use application_notification::features::ntpg000::LiveNotificationHandler;
+    let r = rig();
+    let handler = LiveNotificationHandler::new(r.exec.clone());
+    handler.handle(None, serde_json::to_vec(&message("somchai", Uuid::now_v7(), "2026-10-12T01:00:00Z")).unwrap()).await;
+    handler.handle(None, b"not json".to_vec()).await;
+    assert_eq!(r.push.sent.lock().unwrap().len(), 1);
+}

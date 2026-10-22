@@ -47,6 +47,22 @@ Any backend service ──NotificationService.notify()──▶ Redpanda topic `
 
 Because the SSE hub lives in each instance's memory and every replica must receive every message to push to its connected browser sessions, each replica must configure a **unique** `NOTIFICATION_CONSUMER_GROUP` (database inserts remain safe across replicas because duplicate UUIDv7 primary keys are ignored via `ON CONFLICT DO NOTHING`).
 
+## How a save, update or delete is reported (automatic, every program)
+Every `POST` / `PUT` / `PATCH` / `DELETE` on a program API (`/api/v1/<system>/<program>/…`) tells the user who made it, with no per-page code: the `change_notice` middleware (`infrastructure/src/middleware/notice/`) queues one notice per request through the notification port, and it reaches the user's open sessions over the SSE stream of the bell as a **toast** (`NotificationToast`, over every page; green = success, red = failure; click opens the program).
+
+| `kind` | When | Kept? | Route |
+|---|---|---|---|
+| `data_created` | `POST` on a collection answered 2xx | **no** (live only) | topic `notification-live` → SSE event `live` |
+| `data_updated` | `PUT` / `PATCH`, or `POST` on a record (an action such as suspend / send mail) answered 2xx | no | same |
+| `data_deleted` | `DELETE` answered 2xx | no | same |
+| `data_failed` | any of these answered 4xx / 5xx (validation 400, no permission 403, version conflict 412 …) except 401 | **yes**, in the user's list (300 cap) | topic `notifications` → stored, SSE event `notification` (bell, chime) |
+
+- **A success is not stored and not indexed**: the change itself is already in the audit trail (`al_capture_change` before/after, plus the API event). `notification-live` is a separate topic that api-notification only pushes (`PushEvent::Live`): no `nt_notification` row, no unread count, no chime, nothing for a user who is not connected, and no Quickwit index (only `report.requests` and `notifications` have one). `make topics` creates it with 1 hour retention. A failure is kept so the user can find what went wrong later.
+- `data` = `{program, target, status}`; `target` is the first path segment after the program (`employees`, `users`, `config`); texts: `ntpg000.kind.data_*.title/body` (`sql/93_i18n_data_change_notices.sql`).
+- Only the user who made the request is told. Not noticed: reads, programs that report on their own (`ALPG000`, `RPPG000`, `NTPG000`; add to `QUIET_PROGRAMS` in `change_target.rs`) and the sub-resources a form saves with its record (`…/contacts`, `…/image`).
+- Per save the cost is one small Redpanda message and one push into memory; Postgres is written only for failures. Without a Redpanda client api-master sends nothing (requests pass through untouched); a notice can never fail or slow a request.
+- Several api-notification instances: give each its own `NOTIFICATION_CONSUMER_GROUP` and `NOTIFICATION_LIVE_CONSUMER_GROUP`. Each pushes live notices to its own streams; for stored notices an instance also pushes a still-fresh message (under a minute) that another instance stored first, but not an old one replayed after a restart.
+
 ## Adding a New Notification Kind
 
 Define a new `kind` constant in `notification_kind`, supply fallback `title`/`body` strings, populate `data` with kind-specific parameters, set `link` to the target relative route path, and call `notify`. No changes to `api-notification` are required.

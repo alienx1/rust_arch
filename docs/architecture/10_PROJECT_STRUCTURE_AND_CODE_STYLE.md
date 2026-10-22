@@ -192,7 +192,7 @@ sequenceDiagram
 
 ### 4.1 Rules for Routers
 1. **Trait Inversion**: Route handlers must depend **only** on trait contracts (e.g. `Arc<dyn FeatureCommands>`), never on concrete database pools or executors directly.
-2. **FromRef Extraction**: `AppConnection` must implement `axum::extract::FromRef<AppConnection> for Arc<dyn FeatureCommands>` so handlers can extract command traits directly via `State(commands): State<Arc<dyn FeatureCommands>>`.
+2. **Service registry**: each feature registers its executor by type in `handler/api/master/src/wiring/<feature>.rs` (`services.insert::<dyn FeatureCommands>(..)`); a single blanket `impl<T: ?Sized> FromRef<AppConnection> for Arc<T>` resolves it, so handlers extract command traits directly via `State(commands): State<Arc<dyn FeatureCommands>>` with no per-feature field or `FromRef` in `connection.rs` (see `services.rs`).
 3. **Axum 0.8 Path Syntax**: Always use `{param}` in route patterns (`route("/{lid}", get(...))`). Never use deprecated `/:param`.
 4. **Error Mapping**: Map domain errors (`FeatureError`) into HTTP status codes and structured JSON bodies (`FeatureApiError` implementing `IntoResponse`).
 

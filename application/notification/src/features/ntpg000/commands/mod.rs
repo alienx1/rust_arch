@@ -7,11 +7,14 @@ use crate::features::ntpg000::errors::Ntpg000Error;
 use crate::features::ntpg000::models::NotificationListDto;
 
 mod ingest_notification;
+mod live_notification_handler;
+mod push_live_notice;
 mod list_notifications;
 mod mark_notifications_read;
 mod notification_message_handler;
 pub mod ntpg000_executor;
 
+pub use live_notification_handler::LiveNotificationHandler;
 pub use notification_message_handler::NotificationMessageHandler;
 pub use ntpg000_executor::Ntpg000CommandExecutor;
 
@@ -21,6 +24,10 @@ pub trait Ntpg000Commands: Send + Sync {
     /// sessions. A redelivered message (same id) is stored and pushed once. Never fails the
     /// consumer: a message that cannot be stored is logged and dropped.
     async fn ingest(&self, message: NotificationMessage);
+
+    /// Pushes a notice to the recipient's open sessions and keeps nothing (no row, no unread
+    /// count). A message that cannot be read, or has no recipient, is logged and dropped.
+    async fn push_live(&self, message: NotificationMessage);
 
     /// The user's notifications, newest first (`limit` default 20, at most 300 = the per-user cap), and how many are
     /// unread in all

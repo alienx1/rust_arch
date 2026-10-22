@@ -2,6 +2,7 @@
 
 pub mod access_control;
 pub mod account_security;
+pub mod department_default_group;
 pub mod supg001;
 pub mod supg002;
 pub mod supg003;

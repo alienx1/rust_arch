@@ -55,6 +55,13 @@ Screen for managing organizational sub-units under a company — including branc
 
 ### 2.3 Business Rules & Actions
 - [x] **Headquarters Rule**: Each company may have at most one headquarters branch (`branch_type = HEAD`).
+- [x] **Default Permission Group of a department** (`db_department.default_permission_group_id`, optional): the accounts of the department's employees get that permission group **at the department's branch** (scope level `branch`), added automatically as an ordinary `su_user_assignment` row (`features/su/department_default_group.rs`):
+  - when an account is created (SUPG004 adds it to what the admin picked; with nothing picked it is the account's only assignment, so its primary group);
+  - when the default is set or changed on the department: the existing accounts of its employees that do not hold the group yet get it (in the same transaction as the department's save).
+  - Nothing is ever taken away: changing or clearing the default leaves the rows already given (they are the account's own and are edited on SUPG004); an account that already holds the group at any scope is left as it is; an employee moving to another department keeps what they have.
+  - Only an existing, active group can be chosen and **ADMIN cannot** (everyone in the department would become an administrator); a group switched off later is skipped for new accounts.
+  - **Granting needs the right to assign groups**: setting or changing the default (create or update) needs **SUPG004 WRITE** as well as DBPG002 WRITE (403 otherwise), because it assigns a group to every account of the department, the editor's own included; leaving the default as it is, or clearing it, grants nothing and stays a DBPG002 matter. The group list for the selector (`GET /options/permission-groups`) needs READ on both programs. There is no further limit on which group (same as assigning on SUPG004; ADMIN is refused outright) and a manager can hold a group the editor does not have themselves.
+  - Saving clears the ACL and menu caches (the accounts' permissions changed).
 - [x] **Reference Check on Delete**: Branches or departments with dependent departments/employees cannot be deleted (`409 IN_USE`) and should be deactivated instead.
 
 ---

@@ -9,7 +9,7 @@ pub mod errors;
 pub mod models;
 pub mod queries;
 
-pub use commands::{NotificationMessageHandler, Ntpg000CommandExecutor, Ntpg000Commands};
+pub use commands::{LiveNotificationHandler, NotificationMessageHandler, Ntpg000CommandExecutor, Ntpg000Commands};
 pub use errors::Ntpg000Error;
 pub use models::*;
 pub use queries::{DbNtpg000Queries, Ntpg000Queries};

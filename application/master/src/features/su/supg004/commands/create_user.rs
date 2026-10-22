@@ -14,6 +14,7 @@ use crate::features::su::supg004::errors::Supg004Error;
 use crate::features::su::supg004::models::{
     CreateUserCommand, CreateUserResultDto, is_admin_group, su_user,
 };
+use crate::features::su::department_default_group::with_department_default;
 use domain::entity::db_employee;
 
 impl Supg004CommandExecutor {
@@ -55,7 +56,21 @@ impl Supg004CommandExecutor {
             return Err(Supg004Error::Duplicate(format!("Username '{username}' is already taken")));
         }
 
-        let (assignments, groups) = self.validate_assignments(&cmd.assignments).await?;
+        // The employee's department gives its accounts a default permission group at its branch:
+        // added to what was picked (or, with nothing picked, the account's only assignment)
+        let department_default = self.department_default(employee.department_id).await?;
+        let (picked, mut groups) = if cmd.assignments.is_empty() && department_default.is_some() {
+            (Vec::new(), std::collections::HashMap::new())
+        } else {
+            self.validate_assignments(&cmd.assignments).await?
+        };
+        let default_group = department_default.as_ref().map(|d| d.0);
+        let assignments = with_department_default(picked, department_default);
+        if let Some(group_id) = default_group {
+            if let Ok(group) = self.group(group_id).await {
+                groups.insert(group.id, group.code);
+            }
+        }
         // The first assignment's group is the primary group of the account
         let primary_group = assignments[0].0;
         if groups.values().any(|code| is_admin_group(code)) && !can_assign_admin {

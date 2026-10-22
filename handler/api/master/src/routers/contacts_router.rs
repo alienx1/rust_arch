@@ -8,6 +8,7 @@
 //! record outside what the request may look at (`application_core::view_scope`) is a 404.
 
 use application_master::features::db::contacts::{ContactCommands, ContactError, ContactInput, ContactOwner};
+use application_master::features::db::{dbpg001::Dbpg001Commands, dbpg002::Dbpg002Commands};
 use application_master::features::db::dbpg003::Dbpg003Commands;
 use application_master::features::su::access_control::{AccessControl, PermissionAction};
 use axum::{
@@ -64,10 +65,10 @@ fn not_found(id: Uuid) -> ContactApiError {
 async fn visible(owner: ContactOwner, id: Uuid, app: &AppConnection) -> Result<(), ContactApiError> {
     let db = |e: &dyn std::fmt::Display| ContactApiError(ContactError::Database(e.to_string()));
     let found = match owner {
-        ContactOwner::Organization => app.dbpg001_commands.get_organization_by_id(id).await.map_err(|e| db(&e))?.is_some(),
-        ContactOwner::Company => app.dbpg001_commands.get_company_by_id(id).await.map_err(|e| db(&e))?.is_some(),
-        ContactOwner::Branch => app.dbpg002_commands.get_branch_by_id(id).await.map_err(|e| db(&e))?.is_some(),
-        ContactOwner::Employee => app.dbpg003_commands.get_employee_by_id(id).await.map_err(|e| db(&e))?.is_some(),
+        ContactOwner::Organization => app.service::<dyn Dbpg001Commands>().get_organization_by_id(id).await.map_err(|e| db(&e))?.is_some(),
+        ContactOwner::Company => app.service::<dyn Dbpg001Commands>().get_company_by_id(id).await.map_err(|e| db(&e))?.is_some(),
+        ContactOwner::Branch => app.service::<dyn Dbpg002Commands>().get_branch_by_id(id).await.map_err(|e| db(&e))?.is_some(),
+        ContactOwner::Employee => app.service::<dyn Dbpg003Commands>().get_employee_by_id(id).await.map_err(|e| db(&e))?.is_some(),
     };
     if found { Ok(()) } else { Err(not_found(id)) }
 }
@@ -89,12 +90,12 @@ async fn list_for(
     wire: WireFormat,
     id: Uuid,
 ) -> Result<Response, ContactApiError> {
-    let access: Arc<dyn AccessControl> = app.access_control.clone();
+    let access: Arc<dyn AccessControl> = app.service::<dyn AccessControl>();
     if let Err(denied) = require(&access, &user, program, PermissionAction::Read).await {
         return Ok(denied);
     }
     visible(owner, id, &app).await?;
-    let contacts: Arc<dyn ContactCommands> = app.contact_commands.clone();
+    let contacts: Arc<dyn ContactCommands> = app.service::<dyn ContactCommands>();
     Ok(wire.respond(contacts.list_contacts(owner, id).await?))
 }
 
@@ -107,9 +108,9 @@ async fn replace_for(
     id: Uuid,
     body: Vec<ContactInput>,
 ) -> Result<Response, ContactApiError> {
-    let access: Arc<dyn AccessControl> = app.access_control.clone();
+    let access: Arc<dyn AccessControl> = app.service::<dyn AccessControl>();
     let actor = if owner == ContactOwner::Employee {
-        let department = employee_department(&app.dbpg003_commands, id).await;
+        let department = employee_department(&app.service::<dyn Dbpg003Commands>(), id).await;
         require_unit(&access, &user, program, PermissionAction::Write, ScopeLevel::Department, department).await
     } else {
         require(&access, &user, program, PermissionAction::Write).await
@@ -119,7 +120,7 @@ async fn replace_for(
         Err(denied) => return Ok(denied),
     };
     visible(owner, id, &app).await?;
-    let contacts: Arc<dyn ContactCommands> = app.contact_commands.clone();
+    let contacts: Arc<dyn ContactCommands> = app.service::<dyn ContactCommands>();
     Ok(wire.respond(contacts.replace_contacts(owner, id, body, Some(actor.user_id)).await?))
 }
 

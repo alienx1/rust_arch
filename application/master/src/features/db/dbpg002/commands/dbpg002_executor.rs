@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::features::db::dbpg002::commands::Dbpg002Commands;
 use crate::features::db::dbpg002::errors::Dbpg002Error;
 use crate::features::db::dbpg002::models::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, PermissionGroupOptionDto, CreateBranchCommand,
     CreateDepartmentCommand, Dbpg002SummaryDto, DepartmentDto, DepartmentFilterQuery,
     UpdateBranchCommand, UpdateDepartmentCommand,
 };
@@ -43,6 +43,10 @@ impl Dbpg002Commands for Dbpg002CommandExecutor {
         let cache = self.caches.ns(cache_ns::ORG);
         let key = cache.key("list_company_options", &());
         cache.through_key(key, cache_ttl::ORG, || self.list_company_options()).await
+    }
+
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error> {
+        self.list_permission_group_options().await
     }
 
     async fn list_branch_types(&self) -> Result<Vec<BranchTypeLookupDto>, Dbpg002Error> {

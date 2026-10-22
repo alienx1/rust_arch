@@ -4,6 +4,8 @@ use sea_orm::EntityTrait;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use domain::entity::su_permission_group;
+
 use super::label_lookup::{fold_names, matches_search};
 use crate::features::db::dbpg002::errors::Dbpg002Error;
 use crate::features::db::dbpg002::models::{
@@ -39,6 +41,13 @@ impl DbDbpg002Queries {
                 .into_iter()
                 .map(|l| (l.department_id, l.language_id, l.label)),
         );
+
+        let group_codes: HashMap<Uuid, String> = su_permission_group::Entity::find()
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|g| (g.id, g.code))
+            .collect();
 
         let term = search.unwrap_or("").trim().to_lowercase();
         let mut out = Vec::new();
@@ -88,6 +97,8 @@ impl DbDbpg002Queries {
                 active: d.active,
                 name_th,
                 name_en,
+                default_permission_group_id: d.default_permission_group_id,
+                default_permission_group_code: d.default_permission_group_id.and_then(|g| group_codes.get(&g).cloned()),
                 row_version: d.row_version,
             });
         }

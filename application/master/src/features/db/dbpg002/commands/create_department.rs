@@ -4,6 +4,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, Tran
 use tracing::info;
 use uuid::Uuid;
 
+use super::default_group_rules::check_default_group;
 use super::department_label_writer::upsert_department_label;
 use super::name_rules::{names_for_create, required};
 use crate::features::db::dbpg002::commands::dbpg002_executor::Dbpg002CommandExecutor;
@@ -42,6 +43,8 @@ impl Dbpg002CommandExecutor {
             )));
         }
 
+        check_default_group(&self.db, cmd.default_permission_group_id).await?;
+
         let id = Uuid::now_v7();
         info!("Creating new department: id={id}, code={code}");
 
@@ -53,6 +56,7 @@ impl Dbpg002CommandExecutor {
             branch_id: Set(branch.id),
             code: Set(code),
             active: Set(cmd.active),
+            default_permission_group_id: Set(cmd.default_permission_group_id),
             change_by: Set(actor_id),
             row_version: Set(1),
         }

@@ -79,6 +79,7 @@ impl Ntpg000Commands for Bell {
     async fn ingest(&self, message: NotificationMessage) {
         self.0.lock().unwrap().push(message);
     }
+    async fn push_live(&self, _message: NotificationMessage) {}
     async fn list(&self, _u: &str, _l: Option<u64>) -> Result<NotificationListDto, Ntpg000Error> {
         unreachable!()
     }

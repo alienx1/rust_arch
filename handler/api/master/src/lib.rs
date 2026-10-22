@@ -5,6 +5,8 @@
 pub mod cache_policy;
 pub mod connection;
 pub mod routers;
+pub mod services;
+pub mod wiring;
 pub mod view_scope_layer;
 
 pub use connection::*;

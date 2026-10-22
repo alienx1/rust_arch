@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg002::errors::Dbpg002Error;
 use crate::features::db::dbpg002::models::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, Dbpg002SummaryDto,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, PermissionGroupOptionDto, CompanyOptionDto, Dbpg002SummaryDto,
     DepartmentDto, DepartmentFilterQuery,
 };
 
@@ -32,6 +32,10 @@ impl DbDbpg002Queries {
 impl super::Dbpg002Queries for DbDbpg002Queries {
     async fn list_company_options(&self) -> Result<Vec<CompanyOptionDto>, Dbpg002Error> {
         self.list_company_options().await
+    }
+
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error> {
+        self.list_permission_group_options().await
     }
 
     async fn list_branch_types(&self) -> Result<Vec<BranchTypeLookupDto>, Dbpg002Error> {

@@ -56,7 +56,7 @@ Model after `handler/api/report/` (include `[lib]` + `src/lib.rs` so integration
 |---|---|
 | `Cargo.toml` | `name = "api-<svc>"`, `[lib] name = "api_<svc>"`, `[[bin]]`; register in root `Cargo.toml` |
 | `src/main.rs` | Load `.env`, initialize tracing, read `<SVC>_HOST/PORT/PREFIX`, configure **graceful shutdown + 10-second watchdog + immediate exit on second Ctrl+C** (prevents open SSE streams from hanging shutdown) |
-| `src/connection.rs` | Connect to DB / Valkey / Kratos / required adapters; assemble command executors; launch `spawn_worker` |
+| `src/connection.rs` | Connect to DB / Valkey / Kratos / required adapters; assemble command executors; launch `spawn_worker` (api-master splits the executors into `src/wiring/<feature>.rs` with a type-keyed registry, `src/services.rs`) |
 | `src/routers/base_router.rs` | `/health`, `/livez`, `/readyz`; wrap program routes with `require_kratos_session`; `cbor_error_responses`; CORS; tracing |
 | `src/routers/<program>_router.rs` | Axum router consuming `State<Arc<dyn …Commands>>` only |
 

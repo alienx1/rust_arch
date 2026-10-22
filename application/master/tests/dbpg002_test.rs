@@ -2,7 +2,7 @@
 //! Located at `application/master/tests/dbpg002_test.rs`.
 
 use application_master::features::db::dbpg002::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand, PermissionGroupOptionDto,
     CreateDepartmentCommand, DepartmentDto, DepartmentFilterQuery, Dbpg002Commands, Dbpg002Error,
     Dbpg002Queries, Dbpg002SummaryDto, UpdateBranchCommand, UpdateDepartmentCommand,
 };
@@ -43,6 +43,8 @@ fn department(branch: &BranchDto, code: &str, active: bool) -> DepartmentDto {
         active,
         name_th: format!("แผนก {code}"),
         name_en: format!("Department {code}"),
+        default_permission_group_id: None,
+        default_permission_group_code: None,
         row_version: 1,
     }
 }
@@ -56,6 +58,10 @@ struct MockDbpg002Commands {
 #[async_trait]
 impl Dbpg002Queries for MockDbpg002Commands {
     async fn list_company_options(&self) -> Result<Vec<CompanyOptionDto>, Dbpg002Error> {
+        Ok(vec![])
+    }
+
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error> {
         Ok(vec![])
     }
 
@@ -113,6 +119,10 @@ impl Dbpg002Queries for MockDbpg002Commands {
 impl Dbpg002Commands for MockDbpg002Commands {
     async fn list_company_options(&self) -> Result<Vec<CompanyOptionDto>, Dbpg002Error> {
         Dbpg002Queries::list_company_options(self).await
+    }
+
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error> {
+        Dbpg002Queries::list_permission_group_options(self).await
     }
 
     async fn list_branch_types(&self) -> Result<Vec<BranchTypeLookupDto>, Dbpg002Error> {
@@ -303,6 +313,7 @@ async fn test_create_department_uppercases_and_rejects_duplicate() {
         active: true,
         name_th: "การเงิน".to_string(),
         name_en: "Finance".to_string(),
+        default_permission_group_id: None,
     };
 
     let created = mock.create_department(cmd("acc"), None).await.unwrap();
@@ -323,6 +334,7 @@ async fn test_update_department_checks_row_version() {
         active: true,
         name_th: "ไอที".to_string(),
         name_en: "IT".to_string(),
+        default_permission_group_id: None,
         row_version,
     };
 

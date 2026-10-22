@@ -3,7 +3,7 @@
 //! Calls the endpoints of program `DBPG002` under `/api/v1/db/dbpg002`.
 
 use crate::pages::db::dbpg002::models::{
-    BranchDto, BranchTypeOptionDto, CompanyOptionDto, CreateBranchInput, CreateDepartmentInput,
+    BranchDto, BranchTypeOptionDto, PermissionGroupOptionDto, CompanyOptionDto, CreateBranchInput, CreateDepartmentInput,
     Dbpg002SummaryDto, DepartmentDto, UpdateBranchInput, UpdateDepartmentInput,
 };
 use crate::api_client::ApiClient;
@@ -125,6 +125,10 @@ impl Dbpg002Service {
 
     pub async fn fetch_company_options(&self) -> Result<Vec<CompanyOptionDto>, String> {
         self.get("/companies", &t_or("dbpg002.what.company", "บริษัท")).await
+    }
+
+    pub async fn fetch_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, String> {
+        self.get("/options/permission-groups", &t_or("dbpg002.what.permission_group", "กลุ่มสิทธิ์")).await
     }
 
     pub async fn fetch_branch_types(&self) -> Result<Vec<BranchTypeOptionDto>, String> {

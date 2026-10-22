@@ -3,7 +3,7 @@
 
 /// Segments of `path` after `/api/v1` and the optional `/master` service prefix;
 /// `None` when the path is not an API path
-fn api_segments(path: &str) -> Option<Vec<&str>> {
+pub(crate) fn api_segments(path: &str) -> Option<Vec<&str>> {
     let mut segs = path.split('/').filter(|s| !s.is_empty());
     if segs.next()? != "api" || segs.next()? != "v1" {
         return None;
@@ -16,7 +16,7 @@ fn api_segments(path: &str) -> Option<Vec<&str>> {
 }
 
 /// `true` for catalogue program codes in a path segment (`dbpg004`, `supg001`, `alpg000`)
-fn is_program_segment(seg: &str) -> bool {
+pub(crate) fn is_program_segment(seg: &str) -> bool {
     let b = seg.as_bytes();
     b.len() == 7
         && b[..2].iter().all(u8::is_ascii_alphabetic)

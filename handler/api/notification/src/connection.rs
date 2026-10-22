@@ -2,12 +2,12 @@
 //! the consumer that stores and pushes notifications.
 
 use application_core::traits::{
-    EventConsumer, EventHandler, MAIL_SERVICE_GROUP, MAIL_TOPIC, MailService, NOTIFICATION_SERVICE_GROUP,
-    NOTIFICATIONS_TOPIC, NotificationPush,
+    EventConsumer, EventHandler, LIVE_NOTIFICATIONS_TOPIC, LIVE_NOTIFICATION_GROUP, MAIL_SERVICE_GROUP, MAIL_TOPIC,
+    MailService, NOTIFICATION_SERVICE_GROUP, NOTIFICATIONS_TOPIC, NotificationPush,
 };
 use application_notification::features::mail_delivery::MailDeliveryHandler;
 use application_notification::features::ntpg000::{
-    DbNtpg000Queries, NotificationMessageHandler, Ntpg000CommandExecutor, Ntpg000Commands,
+    DbNtpg000Queries, LiveNotificationHandler, NotificationMessageHandler, Ntpg000CommandExecutor, Ntpg000Commands,
 };
 use infrastructure::middleware::KratosConfig;
 use infrastructure::services::{
@@ -69,6 +69,7 @@ impl NotificationConnection {
             Arc::new(Ntpg000CommandExecutor::new(Arc::new(DbNtpg000Queries::new(db.clone())), push));
 
         spawn_consumer(commands.clone());
+        spawn_live_consumer(commands.clone());
         // Mail queued by the other services is sent here, with the SMTP settings of su_configuration
         let mail: Arc<dyn MailService> = Arc::new(infrastructure::ConfiguredMailService::new(db.clone()));
         spawn_mail_consumer(Arc::new(MailDeliveryHandler::new(mail).with_failure_notices(commands.clone())));
@@ -112,4 +113,22 @@ fn spawn_mail_consumer(handler: Arc<MailDeliveryHandler>) {
         }
     });
     info!(topic = MAIL_TOPIC, "mail delivery started");
+}
+
+/// Reads `notification-live` (notices that are only pushed, never stored) for as long as the
+/// process lives. Every instance needs its own group: each pushes to its own open streams.
+fn spawn_live_consumer(commands: Arc<dyn Ntpg000Commands>) {
+    let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+    let group = env::var("NOTIFICATION_LIVE_CONSUMER_GROUP").unwrap_or_else(|_| LIVE_NOTIFICATION_GROUP.to_string());
+    tokio::spawn(async move {
+        let consumer = RedpandaEventConsumer::new(&brokers);
+        let handler: Arc<dyn EventHandler> = Arc::new(LiveNotificationHandler::new(commands));
+        loop {
+            if let Err(e) = consumer.consume(LIVE_NOTIFICATIONS_TOPIC, &group, handler.clone()).await {
+                error!(error = %e, "live notice consumer stopped, retrying in 5 s");
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
+    info!(topic = LIVE_NOTIFICATIONS_TOPIC, "live notice consumer started");
 }

@@ -6,7 +6,7 @@ use crate::access::provide_access_context;
 use crate::audit::use_audit_tracking;
 use crate::layouts::company_switcher::CompanySwitcher;
 use crate::layouts::menu_context::provide_menu_context;
-use crate::pages::nt::ntpg000::components::NotificationBell;
+use crate::pages::nt::ntpg000::components::{NotificationBell, NotificationToast};
 use crate::pages::nt::ntpg000::providers::provide_notifications;
 
 #[component]
@@ -22,6 +22,8 @@ pub fn MasterLayout() -> impl IntoView {
     provide_notifications();
 
     view! {
+        // Toast of a notification that just arrived (how a save went), over every page
+        <NotificationToast />
         <MainLayout
             nav_sections=menu.sections
             user_menu_items=menu.user_menu

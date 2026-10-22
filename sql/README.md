@@ -15,7 +15,7 @@ after it, `admin@arch.local` / `Admin@2026` can sign in (the Kratos identity is 
 | `53_admin_seed.sql` | `ADMIN` group, every grant derived from `db_program`, employee, `admin` account | yes |
 | `54_abac_test_seed.sql` | `ABAC_TEST_DEPT` (READ only, assigned at the IT department) + `test_abac` account | yes |
 | `51_20261014_migrate_org_company_image.sql`, `51_20261014_migrate_employee_image.sql` | migration: `image_key` column (logo / employee photo) on `db_organization` / `db_company` / `db_employee` | yes |
-| `55`–`92` | UI dictionary (`db_label`): base labels, API error templates, per-page translations | yes |
+| `55`–`94` | UI dictionary (`db_label`): base labels, API error templates, per-page translations | yes |
 
 Order rules:
 

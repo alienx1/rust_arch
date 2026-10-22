@@ -60,9 +60,11 @@ features/xx/xxpgnnn/
    - Expose `xxpgnnn_routes()` and `xxpgnnn_routes_with_state(state)` (the latter for router tests).
    - Use Axum 0.8 path parameter syntax `/{id}`, never `/:id`.
 2. Register the router: `routers/mod.rs` (`pub mod` + `pub use`) and `routers/base_router.rs` (**must `.nest` in two places**: inside `api_router` and inside the root router under `/api/v1`).
-3. `connection.rs`: add field `xxpgnnn_commands: Arc<dyn XxpgnnnCommands>`, instantiate the executor (chaining `.with_cache(caches.clone())` if cached), include it in `Self { … }`, and implement `FromRef<AppConnection> for Arc<dyn XxpgnnnCommands>`.
+3. Wiring (**not** `connection.rs`): create `src/wiring/xxpgnnn.rs` with `pub fn register(cx: &WiringContext, services: &mut ServicesBuilder)` that builds the executor from the shared context (`cx.db`, `cx.caches`, `cx.kratos`, `cx.broker` …; chain `.with_cache(cx.caches.clone())` if cached; take another feature with `services.require::<dyn OtherCommands>()`) and registers it with `services.insert::<dyn XxpgnnnCommands>(Arc::new(..))`. Add `pub mod xxpgnnn;` and one line `xxpgnnn::register(cx, &mut s);` to `wiring/mod.rs` (after any feature it builds on), and one `assert!(s.has::<dyn XxpgnnnCommands>())` line to `tests/wiring_test.rs`. The router's `State<Arc<dyn XxpgnnnCommands>>` then resolves by type (one blanket `FromRef<AppConnection> for Arc<T>` in `connection.rs`: no field and no per-feature `FromRef`, so two branches adding programs do not collide there).
 4. Data mutations: pass `actor.user_id` as `change_by`; the database audit trigger automatically captures before/after snapshots when the API sets the session actor (`infrastructure::track_actor`).
 5. If this program mutates data cached under any namespace → add an invalidation rule in `src/cache_policy.rs` (see Section 6).
+
+> **Notices after a save are automatic**: every `POST/PUT/PATCH/DELETE` on `/api/v1/<system>/<xxpgnnn>/…` notifies the user who made it (`data_created|updated|deleted|failed`) through the NTPG000 SSE stream (toast on every page), with no per-page code; a success is live only (not stored, not indexed), a failure is kept in the bell. A new program needs no notification code; if it reports on its own (like reports), add its code to `QUIET_PROGRAMS` in `infrastructure/src/middleware/notice/change_target.rs`. See [`NTPG000_NOTIFICATIONS.md`](../programs/NTPG000_NOTIFICATIONS.md).
 
 ## 4. Tests (Never Inline Inside `src/`)
 

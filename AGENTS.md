@@ -65,7 +65,7 @@ features/<feature>/
       ...
   )
   ```
-- Wire trait objects into `AppConnection` via `axum::extract::FromRef<AppConnection> for Arc<dyn FeatureCommands>`.
+- Wire the executor in `handler/api/<service>/src/wiring/<feature>.rs` (`register(cx, services)`; one line in `wiring/mod.rs`): the registry resolves `State<Arc<dyn FeatureCommands>>` by type through one blanket `FromRef<AppConnection> for Arc<T>`. Do not add a field or a per-feature `FromRef` to `connection.rs` (shared file: merge conflicts).
 - Route handlers must **never** receive raw `DatabaseConnection` or call query implementations directly.
 
 ### 6. Tests MUST NEVER Be Inline Inside `src`
@@ -98,6 +98,7 @@ pages/<feature>/
 - **Tables**: list tables MUST use the shared `web_package::ui::component::DataTable` (header with search/refresh/actions, `FilterChips`, loading/empty states, numbered pagination) — same look as `/su/supg005`. Pages supply only `DataColumn`s and the `<TableRow>`s; do not hand-roll a `Card` + `Table` shell.
 - **Optimistic locking**: edit commands carry the `row_version` the form loaded and save through `features::optimistic_update::update_versioned` (never compare or `+ 1` the version by hand); a stale save is `VersionConflict` → HTTP 412 `VERSION_CONFLICT`. See `docs/architecture/05_DATA_CONSISTENCY_AND_STORAGE.md` §2.2.
 - **Two-level decision for data-changing buttons**: every button that changes data (save, delete, suspend/reactivate, revoke, force change, send mail, re-process, mark all read ...) MUST ask for confirmation before it acts: use `web_package::ui::component::{ConfirmButton, SaveConfirmButton, DeleteConfirmButton}` (first click shows "are you sure?" in place, second click runs the action). Never call a mutating callback straight from `on_click`. Buttons that only navigate, filter, page, preview or download are exempt.
+- **Change notices are automatic**: a create / update / delete on a program API notifies the user who made it (kind `data_created|updated|deleted|failed`, through the notification SSE stream, toast on every page; a success is live only (never stored or indexed), a failure is kept in the bell) via the `change_notice` middleware. Do not add per-page notification code; silence a program that reports on its own in `QUIET_PROGRAMS`.
 - **Environment Gating for Static Demos**: Interactive demo / playground pages (`/demo`) must be conditionally rendered only in `localhost` or `dev` environments via `is_dev_env()`, both in route definitions and in `AppShell` sidebars.
 
 ---
@@ -123,7 +124,7 @@ When asked to build a new backend feature (e.g. `department` or `employee`):
    - Write handler functions consuming `State(commands): State<Arc<dyn FeatureCommands>>`.
    - Expose `pub fn <feature>_routes() -> Router<AppConnection>`.
    - Mount in `routers/base_router.rs`.
-   - Implement `FromRef<AppConnection> for Arc<dyn FeatureCommands>` in `connection.rs`.
+   - Wire it: `wiring/<feature>.rs` (build the executor from `WiringContext`, `services.insert::<dyn FeatureCommands>(..)`) + one line in `wiring/mod.rs::register_all` (after any feature it builds on); add the type to `tests/wiring_test.rs`.
 5. **Tests for Router**:
    - Create tests in `handler/api/master/tests/<feature>_router_test.rs`.
 6. **Verify Compilation & Tests**:

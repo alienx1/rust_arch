@@ -3,7 +3,7 @@
 
 use api_master::routers::{DBPG002_PATH, Dbpg002State, dbpg002_routes_with_state};
 use application_master::features::db::dbpg002::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand, PermissionGroupOptionDto,
     CreateDepartmentCommand, Dbpg002Commands, Dbpg002Error, Dbpg002SummaryDto, DepartmentDto,
     DepartmentFilterQuery, UpdateBranchCommand, UpdateDepartmentCommand,
 };
@@ -59,6 +59,8 @@ impl MockDbpg002Commands {
             active: true,
             name_th: "ไอที".to_string(),
             name_en: "IT".to_string(),
+            default_permission_group_id: None,
+            default_permission_group_code: None,
             row_version,
         }
     }
@@ -74,6 +76,10 @@ impl Dbpg002Commands for MockDbpg002Commands {
             name_th: "บริษัท 1".to_string(),
             name_en: "Company 1".to_string(),
         }])
+    }
+
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error> {
+        Ok(vec![PermissionGroupOptionDto { id: uuid::Uuid::nil(), code: "STAFF".to_string() }])
     }
 
     async fn list_branch_types(&self) -> Result<Vec<BranchTypeLookupDto>, Dbpg002Error> {
@@ -189,11 +195,12 @@ impl AccessControl for MockAccess {
         program_code: &str,
         action: PermissionAction,
     ) -> Result<Option<Actor>, AccessError> {
-        assert_eq!(program_code, "DBPG002");
-        let allowed = match (username, action) {
-            ("admin", _) => true,
-            ("writer", PermissionAction::Read | PermissionAction::Write) => true,
-            ("reader", PermissionAction::Read) => true,
+        // Only the admin may also assign permission groups (SUPG004): the writer manages departments only
+        assert!(matches!(program_code, "DBPG002" | "SUPG004"), "{program_code}");
+        let allowed = match (program_code, username, action) {
+            (_, "admin", _) => true,
+            ("DBPG002", "writer", PermissionAction::Read | PermissionAction::Write) => true,
+            ("DBPG002", "reader", PermissionAction::Read) => true,
             _ => false,
         };
         Ok(allowed.then(|| Actor { user_id: Uuid::nil(), username: username.to_string() }))
@@ -533,4 +540,54 @@ async fn test_admin_can_delete() {
         let resp = app.clone().oneshot(delete(&uri)).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT, "{uri}");
     }
+}
+
+#[tokio::test]
+async fn test_permission_group_options_are_for_those_who_may_assign_groups() {
+    let resp = router_as(mock(), "admin").oneshot(get("/db/dbpg002/options/permission-groups")).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let list: serde_json::Value = body_json(resp).await;
+    assert_eq!(list[0]["code"], "STAFF");
+    // A department manager who cannot assign groups does not get the list of groups
+    for user in ["writer", "reader"] {
+        let resp = router_as(mock(), user).oneshot(get("/db/dbpg002/options/permission-groups")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN, "{user}");
+    }
+}
+
+fn department_body_with_default(default_group: Option<uuid::Uuid>, row_version: i64) -> serde_json::Value {
+    serde_json::json!({
+        "branch_id": uuid::Uuid::nil(), "code": "it", "active": true, "name_th": "ไอที", "name_en": "IT",
+        "default_permission_group_id": default_group, "row_version": row_version
+    })
+}
+
+#[tokio::test]
+async fn test_setting_a_default_permission_group_needs_the_right_to_assign_groups() {
+    let group = Some(uuid::Uuid::now_v7());
+    let create = |user: &'static str, group| {
+        let app = router_as(mock(), user);
+        async move {
+            app.oneshot(json_request("POST", "/db/dbpg002/departments", department_body_with_default(group, 1))).await.unwrap().status()
+        }
+    };
+    // A department manager cannot hand out a permission group (it would reach every account of the
+    // department, themselves included); whoever may assign groups on SUPG004 can
+    assert_eq!(create("writer", group).await, StatusCode::FORBIDDEN);
+    assert_eq!(create("admin", group).await, StatusCode::OK);
+    assert_eq!(create("writer", None).await, StatusCode::OK, "a department without a default is still a DBPG002 matter");
+
+    let update = |user: &'static str, group| {
+        let app = router_as(mock(), user);
+        async move {
+            let id = mock().department_id;
+            app.oneshot(json_request("PUT", &format!("/db/dbpg002/departments/{id}"), department_body_with_default(group, 1)))
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    assert_eq!(update("writer", group).await, StatusCode::FORBIDDEN, "changing the default is granting it");
+    assert_eq!(update("admin", group).await, StatusCode::OK);
+    assert_eq!(update("writer", None).await, StatusCode::OK, "clearing it, or not touching it, grants nothing");
 }

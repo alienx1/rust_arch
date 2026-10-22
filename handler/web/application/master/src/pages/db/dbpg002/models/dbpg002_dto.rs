@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use web_package::core::i18n::localized;
 
-use crate::pages::db::dbpg000::models::{deserialize_id, serialize_id};
+use crate::pages::db::dbpg000::models::{deserialize_id, deserialize_opt_id, serialize_id, serialize_opt_id};
 
 /// Company option for the company filter / parent selector
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -22,6 +22,14 @@ impl CompanyOptionDto {
         let name = localized(&self.name_th, &self.name_en);
         format!("{name} ({})", self.code)
     }
+}
+
+/// Permission group option for a department's default group
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PermissionGroupOptionDto {
+    #[serde(deserialize_with = "deserialize_id")]
+    pub id: String,
+    pub code: String,
 }
 
 /// Branch type option (HEAD / BRANCH)
@@ -84,6 +92,11 @@ pub struct DepartmentDto {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Permission group the accounts of the department's employees get at the branch
+    #[serde(default, deserialize_with = "deserialize_opt_id")]
+    pub default_permission_group_id: Option<String>,
+    #[serde(default)]
+    pub default_permission_group_code: Option<String>,
     pub row_version: i64,
 }
 
@@ -130,6 +143,9 @@ pub struct CreateDepartmentInput {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    /// Permission group the accounts of the department's employees get at the branch (optional)
+    #[serde(default, serialize_with = "serialize_opt_id")]
+    pub default_permission_group_id: Option<String>,
 }
 
 /// Input payload to update a department
@@ -141,5 +157,7 @@ pub struct UpdateDepartmentInput {
     pub active: bool,
     pub name_th: String,
     pub name_en: String,
+    #[serde(default, serialize_with = "serialize_opt_id")]
+    pub default_permission_group_id: Option<String>,
     pub row_version: i64,
 }

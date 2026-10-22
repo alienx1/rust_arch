@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::features::db::dbpg002::errors::Dbpg002Error;
 use crate::features::db::dbpg002::models::{
-    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, CreateBranchCommand,
+    BranchDto, BranchFilterQuery, BranchTypeLookupDto, CompanyOptionDto, PermissionGroupOptionDto, CreateBranchCommand,
     CreateDepartmentCommand, Dbpg002SummaryDto, DepartmentDto, DepartmentFilterQuery,
     UpdateBranchCommand, UpdateDepartmentCommand,
 };
@@ -14,6 +14,7 @@ mod branch_label_writer;
 mod branch_type_rules;
 mod create_branch;
 mod create_department;
+mod default_group_rules;
 mod delete_branch;
 mod delete_department;
 pub mod dbpg002_executor;
@@ -24,6 +25,7 @@ mod get_summary;
 mod list_branch_types;
 mod list_branches;
 mod list_company_options;
+mod list_permission_group_options;
 mod list_departments;
 mod name_rules;
 mod update_branch;
@@ -38,6 +40,9 @@ pub trait Dbpg002Commands: Send + Sync {
 
     /// Branch types (HEAD / BRANCH)
     async fn list_branch_types(&self) -> Result<Vec<BranchTypeLookupDto>, Dbpg002Error>;
+
+    /// Active permission groups, for a department's default group
+    async fn list_permission_group_options(&self) -> Result<Vec<PermissionGroupOptionDto>, Dbpg002Error>;
 
     /// List branches with optional filters
     async fn list_branches(

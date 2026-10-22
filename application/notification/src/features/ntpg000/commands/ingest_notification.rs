@@ -23,7 +23,33 @@ fn safe_link(link: Option<&str>) -> Option<String> {
         .map(|l| cap(l, MAX_LINK))
 }
 
+/// How long after its creation a stored-already notification is still pushed to this instance's streams
+const FRESH_FOR_SECS: i64 = 60;
+
+fn is_fresh(created_at: DateTime<Utc>) -> bool {
+    (Utc::now() - created_at).num_seconds().abs() <= FRESH_FOR_SECS
+}
+
 impl Ntpg000CommandExecutor {
+    /// Sends the notification to every open stream of the recipient (nobody listening is fine)
+    async fn push_to_streams(&self, recipient: &str, row: NotificationModel) {
+        let pushed = crate::features::ntpg000::models::NotificationDto::from(row);
+        self.push
+            .push(
+                recipient,
+                PushEvent::Notification(application_core::traits::Notification {
+                    id: pushed.id,
+                    kind: pushed.kind,
+                    title: pushed.title,
+                    body: pushed.body,
+                    data: pushed.data,
+                    link: pushed.link,
+                    created_at: pushed.created_at,
+                }),
+            )
+            .await;
+    }
+
     pub(super) async fn ingest_action(&self, message: NotificationMessage) {
         let n = message.notification;
         let recipient = message.recipient.trim().to_string();
@@ -57,23 +83,13 @@ impl Ntpg000CommandExecutor {
                     Ok(n) => tracing::debug!(%recipient, removed = n, "oldest notifications removed (per-user cap)"),
                     Err(e) => tracing::error!(%recipient, error = %e, "notification cap not enforced"),
                 }
-                let pushed = crate::features::ntpg000::models::NotificationDto::from(row);
-                self.push
-                    .push(
-                        &recipient,
-                        PushEvent::Notification(application_core::traits::Notification {
-                            id: pushed.id,
-                            kind: pushed.kind,
-                            title: pushed.title,
-                            body: pushed.body,
-                            data: pushed.data,
-                            link: pushed.link,
-                            created_at: pushed.created_at,
-                        }),
-                    )
-                    .await;
+                self.push_to_streams(&recipient, row).await;
             }
-            // Redelivered: already stored and pushed
+            // Another instance of this service stored it first (every instance reads every message
+            // so each can push to its own open streams), or the broker redelivered it. A message
+            // that is still fresh goes to this instance's streams anyway; an old one was pushed when
+            // it was new and must not ring again after a restart.
+            Ok(false) if is_fresh(created_at) => self.push_to_streams(&recipient, row).await,
             Ok(false) => tracing::debug!(%id, "notification already stored"),
             Err(e) => tracing::error!(%id, error = %e, "notification not stored"),
         }

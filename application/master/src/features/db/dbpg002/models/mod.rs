@@ -27,6 +27,6 @@ pub use dbpg002_constants::BRANCH_TYPE_HEAD;
 pub use dbpg002_summary_dto::Dbpg002SummaryDto;
 pub use department_dto::DepartmentDto;
 pub use department_filter_query::DepartmentFilterQuery;
-pub use lookup_option_dto::{BranchTypeLookupDto, CompanyOptionDto};
+pub use lookup_option_dto::{BranchTypeLookupDto, CompanyOptionDto, PermissionGroupOptionDto};
 pub use update_branch_command::UpdateBranchCommand;
 pub use update_department_command::UpdateDepartmentCommand;

@@ -119,6 +119,11 @@ pub async fn stream_handler(
                     let event = Event::default().event("notification").json_data(&n).unwrap_or_default();
                     return Some((Ok(event), rx));
                 }
+                // A notice that is not stored: the page shows it, nothing to reload
+                Ok(PushEvent::Live(n)) => {
+                    let event = Event::default().event("live").json_data(&n).unwrap_or_default();
+                    return Some((Ok(event), rx));
+                }
                 Ok(PushEvent::Changed) => return Some((Ok(Event::default().event("changed").data("{}")), rx)),
                 // Fell behind: tell the tab to reload instead of guessing what it missed
                 Err(RecvError::Lagged(_)) => return Some((Ok(Event::default().event("changed").data("{}")), rx)),

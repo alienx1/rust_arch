@@ -17,10 +17,21 @@ pub mod notification_kind {
     pub const REPORT_FAILED: &str = "report_failed";
     /// A mail the user asked for could not be delivered: `data` = `{to, reason}`
     pub const MAIL_FAILED: &str = "mail_failed";
+    /// The user's create / update / delete succeeded: `data` = `{program, target, status}`
+    pub const DATA_CREATED: &str = "data_created";
+    pub const DATA_UPDATED: &str = "data_updated";
+    pub const DATA_DELETED: &str = "data_deleted";
+    /// The user's create / update / delete failed: `data` = `{program, target, status}`
+    pub const DATA_FAILED: &str = "data_failed";
 }
 
 /// Redpanda topic the notification service consumes
 pub const NOTIFICATIONS_TOPIC: &str = "notifications";
+/// Redpanda topic of notices that are only pushed to open sessions, never stored (and, unlike
+/// [`NOTIFICATIONS_TOPIC`], not indexed): "your save went through"
+pub const LIVE_NOTIFICATIONS_TOPIC: &str = "notification-live";
+/// Default consumer group of the live notices (give every instance its own, like the stored ones)
+pub const LIVE_NOTIFICATION_GROUP: &str = "notification-live-service";
 /// Default consumer group of the notification service. With several instances give each its own
 /// group (every instance must see every message to push to its own open streams; storing is
 /// idempotent by notification id).
@@ -60,6 +71,14 @@ pub trait NotificationService: Send + Sync {
     /// Queues `notification` for the user named `username`. Fire and forget: a broker that does
     /// not answer is logged, never an error for the caller (the job it reports on is done).
     async fn notify(&self, username: &str, notification: Notification);
+
+    /// Tells the user's open sessions now and keeps nothing: no row in the list, no unread count,
+    /// gone for a user who is not connected. For notices whose record lives elsewhere (a saved row
+    /// is in the audit trail already). The default stores it like `notify` (test doubles, adapters
+    /// with no live channel).
+    async fn notify_live(&self, username: &str, notification: Notification) {
+        self.notify(username, notification).await
+    }
 }
 
 /// What an open stream of a user receives
@@ -69,6 +88,8 @@ pub enum PushEvent {
     Notification(Notification),
     /// The user's notifications changed (read elsewhere): reload the list
     Changed,
+    /// A notice that is not stored: show it, do not reload the list or ring
+    Live(Notification),
 }
 
 /// Delivering side, owned by the notification service: the open sessions (streams) of users
