@@ -32,6 +32,14 @@ impl Dbpg002CommandExecutor {
             .await?
             .ok_or_else(|| Dbpg002Error::NotFound(id.to_string()))?;
 
+        // The decisions below (is the default changing, is the branch moving) read `existing`: it
+        // must be the row at the version this save carries, or they would rest on a different state
+        // than the one the write replaces (the optimistic lock at the write rejects any change after
+        // this check, so the two stay the same row)
+        if existing.row_version != cmd.row_version {
+            return Err(Dbpg002Error::VersionConflict);
+        }
+
         let branch = db_branch::Entity::find_by_id(cmd.branch_id)
             .one(&self.db)
             .await?
@@ -57,6 +65,9 @@ impl Dbpg002CommandExecutor {
 
         check_default_group(&self.db, cmd.default_permission_group_id).await?;
         let default_changed = existing.default_permission_group_id != cmd.default_permission_group_id;
+        // Moving a department that has a default changes the scope that group is handed out at
+        // (new accounts get it at the department's branch): a grant decision as well
+        let branch_changed = existing.branch_id != branch.id;
 
         let next_version = existing.row_version + 1;
         let txn = self.db.begin().await?;
@@ -72,9 +83,11 @@ impl Dbpg002CommandExecutor {
         // Checked after the optimistic lock: `default_changed` was read from the row at exactly the
         // version this save carries, so the decision and the write see the same state. Refusing
         // here drops the transaction (nothing is saved).
-        if default_changed && cmd.default_permission_group_id.is_some() && !may_assign_groups {
+        if (default_changed || branch_changed) && cmd.default_permission_group_id.is_some() && !may_assign_groups {
             return Err(Dbpg002Error::NotAllowed(
-                "Changing the default permission group needs the right to assign permission groups".to_string(),
+                "Changing the default permission group, or moving a department that has one to another branch, \
+                 needs the right to assign permission groups"
+                    .to_string(),
             ));
         }
 
